@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const { executeQuery } = require('../config/database');
 const { verifyToken, requireOrgAdmin, requireOrgAccess } = require('../middleware/auth');
 const { validateUserUpdate, validatePagination, validateSearch } = require('../middleware/validation');
+const { canChangeUserPassword } = require('../utils/authorization');
+const { validatePassword } = require('../utils/helpers');
 
 const router = express.Router();
 
@@ -28,11 +30,11 @@ router.post('/', verifyToken, requireOrgAdmin, async (req, res) => {
       });
     }
 
-    // Validate password length
-    if (password.length < 6) {
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long'
+        message: passwordCheck.errors.join('. ')
       });
     }
 
@@ -423,19 +425,19 @@ router.put('/:id/password', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
+    const targetUserId = parseInt(id, 10);
 
-    // User can only change their own password unless they're admin
-    if (req.user.id !== parseInt(id) && !['organization_admin', 'platform_owner'].includes(req.user.role)) {
-      return res.status(403).json({
+    if (!Number.isInteger(targetUserId) || targetUserId < 1) {
+      return res.status(400).json({
         success: false,
-        message: 'You can only change your own password'
+        message: 'Invalid user ID'
       });
     }
 
     // Get user
     const userResult = await executeQuery(
-      'SELECT password_hash FROM users WHERE id = ?',
-      [id]
+      'SELECT id, password_hash, organization_id, role, status FROM users WHERE id = ?',
+      [targetUserId]
     );
 
     if (!userResult.success || userResult.data.length === 0) {
@@ -445,9 +447,18 @@ router.put('/:id/password', verifyToken, async (req, res) => {
       });
     }
 
+    const targetUser = userResult.data[0];
+
+    if (!canChangeUserPassword({ requester: req.user, targetUser })) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only change your own password or users in your organization'
+      });
+    }
+
     // Verify current password (except for admin changing other user's password)
-    if (req.user.id === parseInt(id)) {
-      const isValidPassword = await bcrypt.compare(currentPassword, userResult.data[0].password_hash);
+    if (req.user.id === targetUserId) {
+      const isValidPassword = await bcrypt.compare(currentPassword, targetUser.password_hash);
       if (!isValidPassword) {
         return res.status(400).json({
           success: false,
@@ -457,10 +468,11 @@ router.put('/:id/password', verifyToken, async (req, res) => {
     }
 
     // Validate new password
-    if (!newPassword || newPassword.length < 6) {
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters long'
+        message: passwordCheck.errors.join('. ')
       });
     }
 
@@ -471,7 +483,7 @@ router.put('/:id/password', verifyToken, async (req, res) => {
     // Update password
     const updateResult = await executeQuery(
       'UPDATE users SET password_hash = ? WHERE id = ?',
-      [hashedPassword, id]
+      [hashedPassword, targetUserId]
     );
 
     if (!updateResult.success) {
@@ -484,7 +496,7 @@ router.put('/:id/password', verifyToken, async (req, res) => {
     // Log password change
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, req.user.organization_id, 'UPDATE', 'USER', id, JSON.stringify({ action: 'password_change' })]
+      [req.user.id, req.user.organization_id, 'UPDATE', 'USER', targetUserId, JSON.stringify({ action: 'password_change' })]
     );
 
     res.json({

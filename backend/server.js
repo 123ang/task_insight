@@ -7,6 +7,12 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const { testConnection } = require('./config/database');
+const {
+  getAllowedCorsOrigins,
+  getFrameAncestors,
+  isOriginAllowed,
+  validateRequiredSecurityConfig,
+} = require('./config/security');
 const { logger, redactSensitive } = require('./utils/logger');
 
 // Import routes
@@ -26,44 +32,65 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'frame-ancestors': ["'self'", 'http://localhost:3000', 'https://taskinsight.my'],
+      'frame-ancestors': getFrameAncestors(),
     },
   },
   crossOriginEmbedderPolicy: false, // Allow embedding for previews
 }));
 
 // CORS configuration
+const allowedCorsOrigins = getAllowedCorsOrigins();
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin, allowedCorsOrigins)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS origin not allowed'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Rate limiting - Disabled for development
-// const limiter = rateLimit({
-//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-//   message: {
-//     error: 'Too many requests from this IP, please try again later.'
-//   },
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
+const skipRateLimitInTests = () => process.env.NODE_ENV === 'test';
+const globalLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 300,
+  message: {
+    success: false,
+    message: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipRateLimitInTests,
+});
+const authLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, 10) || 10,
+  message: {
+    success: false,
+    message: 'Too many authentication attempts. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipRateLimitInTests,
+});
 
-// app.use(limiter);
+app.use(globalLimiter);
 
 // Compression middleware
 app.use(compression());
 
-// Logging middleware
-app.use(morgan('combined'));
+// Keep automated test output focused on assertions.
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('combined'));
+}
 
 // Body parsing middleware
 // Note: For file uploads, multer handles size limits separately
 // These limits are for JSON/URL-encoded data
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || '1mb' }));
 
 // Increase server timeout for large file uploads (2 hours)
 // This is important for uploads of files up to 2GB
@@ -82,7 +109,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/files', fileRoutes);
@@ -135,9 +162,10 @@ app.use((error, req, res, next) => {
     });
   }
   
-  res.status(error.status || 500).json({
+  const status = error.status || 500;
+  res.status(status).json({
     success: false,
-    message: error.message || 'Internal server error',
+    message: status >= 500 ? 'Internal server error' : (error.message || 'Request failed'),
     ...(process.env.NODE_ENV === 'development' && { 
       stack: error.stack,
       code: error.code 
@@ -148,6 +176,8 @@ app.use((error, req, res, next) => {
 // Start server
 const startServer = async () => {
   try {
+    validateRequiredSecurityConfig();
+
     // Test database connection
     const dbConnected = await testConnection();
     if (!dbConnected) {

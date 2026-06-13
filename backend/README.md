@@ -55,9 +55,9 @@ A comprehensive Document Management System backend built with Express.js, MySQL,
    DB_HOST=localhost
    DB_PORT=3306
    DB_NAME=dms_database
-   DB_USER=root
-   DB_PASSWORD=your_password
-   JWT_SECRET=your_super_secret_jwt_key_here
+   DB_USER=task_insight_app
+   DB_PASSWORD=
+   JWT_SECRET=
    PORT=5000
    NODE_ENV=development
    ```
@@ -65,6 +65,12 @@ A comprehensive Document Management System backend built with Express.js, MySQL,
 4. **Set up the database**
    - Create MySQL database
    - Run the SQL schema from `../database_schema.sql`
+   - Apply tracked migrations:
+   ```bash
+   npm run migrate
+   ```
+   Migration `002_add_invitation_codes_and_auth_sessions.sql` is required for
+   limited-use invitations and rotating browser sessions.
 
 5. **Start the server**
    ```bash
@@ -97,7 +103,7 @@ backend/
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - User login
-- `POST /api/auth/refresh` - Refresh JWT token
+- `POST /api/auth/refresh` - Rotate the HttpOnly refresh session and issue a new access token
 - `POST /api/auth/logout` - User logout
 - `GET /api/auth/profile` - Get user profile
 - `GET /api/auth/verify` - Verify JWT token
@@ -205,15 +211,16 @@ npx prettier --write .
 | `DB_HOST` | Database host | localhost |
 | `DB_PORT` | Database port | 3306 |
 | `DB_NAME` | Database name | dms_database |
-| `DB_USER` | Database user | root |
-| `DB_PASSWORD` | Database password | - |
-| `JWT_SECRET` | JWT secret key | - |
-| `JWT_EXPIRES_IN` | JWT expiration | 24h |
+| `DB_USER` | Database user | task_insight_app |
+| `DB_PASSWORD` | Database password; required at startup outside tests | - |
+| `JWT_SECRET` | Strong JWT secret; required at startup outside tests | - |
+| `JWT_EXPIRES_IN` | JWT expiration | 1h |
+| `JWT_REFRESH_EXPIRES_IN` | HttpOnly refresh-session expiration | 7d |
 | `PORT` | Server port | 5000 |
 | `NODE_ENV` | Environment | development |
-| `MAX_FILE_SIZE` | Max file size in bytes | 10485760 |
+| `MAX_FILE_SIZE` | Max file size in bytes | 104857600 |
 | `ALLOWED_FILE_TYPES` | Allowed file extensions | pdf,doc,docx,txt,jpg,jpeg,png,gif,mp4,avi,mov |
-| `CORS_ORIGIN` | CORS allowed origin | http://localhost:3000 |
+| `CORS_ORIGINS` | Comma-separated allowed browser origins | http://localhost:3000 |
 
 ## 🚀 Deployment
 

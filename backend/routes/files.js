@@ -21,6 +21,7 @@ const {
   runMalwareScan,
   validateUploadedFile
 } = require('../utils/fileSecurity');
+const { canManageFolder } = require('../utils/authorization');
 
 // Normalize date to MySQL datetime (YYYY-MM-DD HH:mm:ss). Handles ISO strings from frontend.
 const toMysqlDatetime = (value) => {
@@ -93,9 +94,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    // Default to 2GB if MAX_FILE_SIZE is not set
-    // 2GB = 2 * 1024 * 1024 * 1024 = 2147483648 bytes
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024 * 1024 // 2GB default
+    fileSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 100 * 1024 * 1024
   }
 });
 
@@ -286,7 +285,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
       
       // Handle multer errors
       if (err.code === 'LIMIT_FILE_SIZE') {
-        const maxSize = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024 * 1024;
+        const maxSize = parseInt(process.env.MAX_FILE_SIZE, 10) || 100 * 1024 * 1024;
         const maxSizeGB = (maxSize / (1024 * 1024 * 1024)).toFixed(2);
         return res.status(400).json({
           success: false,
@@ -2376,7 +2375,7 @@ router.put('/folders/:folderId/rename', verifyToken, async (req, res) => {
 
     // Check if folder exists and user has access
     const folderResult = await executeQuery(
-      'SELECT id, name, organization_id FROM folders WHERE id = ? AND status = "active"',
+      'SELECT id, name, organization_id, created_by FROM folders WHERE id = ? AND status = "active"',
       [folderId]
     );
 
@@ -2390,7 +2389,7 @@ router.put('/folders/:folderId/rename', verifyToken, async (req, res) => {
     const folder = folderResult.data[0];
 
     // Check permissions
-    if (folder.organization_id !== req.user.organization_id) {
+    if (!canManageFolder({ user: req.user, folder })) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to rename this folder'
@@ -2450,7 +2449,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
 
     // Check if folder exists and user has access
     const folderResult = await executeQuery(
-      'SELECT id, name, organization_id, parent_id FROM folders WHERE id = ? AND status = "active"',
+      'SELECT id, name, organization_id, parent_id, created_by FROM folders WHERE id = ? AND status = "active"',
       [folderId]
     );
 
@@ -2464,7 +2463,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
     const folder = folderResult.data[0];
 
     // Check permissions
-    if (folder.organization_id !== req.user.organization_id) {
+    if (!canManageFolder({ user: req.user, folder })) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to move this folder'
@@ -2483,7 +2482,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
     let targetFolder = null;
     if (parentId !== null) {
       const targetFolderResult = await executeQuery(
-        'SELECT id, name, path FROM folders WHERE id = ? AND organization_id = ? AND status = "active"',
+        'SELECT id, name, path, organization_id, created_by FROM folders WHERE id = ? AND organization_id = ? AND status = "active"',
         [parentId, req.user.organization_id]
       );
 
@@ -2495,6 +2494,13 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
       }
 
       targetFolder = targetFolderResult.data[0];
+
+      if (!canManageFolder({ user: req.user, folder: targetFolder })) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to move folders into the target folder'
+        });
+      }
 
       // Check for circular reference - cannot move folder into its own descendant
       const checkCircular = async (checkFolderId) => {
@@ -2597,7 +2603,7 @@ router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
 
     // Check if folder exists and user has access
     const folderResult = await executeQuery(
-      'SELECT id, name, organization_id FROM folders WHERE id = ? AND status = "active"',
+      'SELECT id, name, organization_id, created_by FROM folders WHERE id = ? AND status = "active"',
       [folderId]
     );
 
@@ -2611,7 +2617,7 @@ router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
     const folder = folderResult.data[0];
 
     // Check permissions
-    if (folder.organization_id !== req.user.organization_id) {
+    if (!canManageFolder({ user: req.user, folder })) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to download this folder'
@@ -2751,7 +2757,7 @@ router.delete('/folders/:folderId', verifyToken, async (req, res) => {
     const folder = folderResult.data[0];
 
     // Check permissions - user must be in the same organization
-    if (folder.organization_id !== req.user.organization_id) {
+    if (!canManageFolder({ user: req.user, folder })) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to delete this folder'

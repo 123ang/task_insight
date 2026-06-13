@@ -65,6 +65,8 @@ export interface Invitation {
   expires_at: string;
   generated_by: number;
   status: string;
+  max_uses: number;
+  use_count: number;
   created_at: string;
   organization_name?: string;
   first_name?: string;
@@ -75,6 +77,7 @@ export interface InvitationCreateRequest {
   organizationId: number;
   role: string;
   expiresInDays?: number;
+  maxUses?: number;
 }
 
 export interface InvitationFilters {

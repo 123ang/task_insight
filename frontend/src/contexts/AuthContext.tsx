@@ -1,9 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { authService, User } from '../services/authService';
 import toast from 'react-hot-toast';
 import { clientLogger } from '../utils/logger';
 
-// Auth Context Types
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -27,119 +26,95 @@ interface AuthContextType {
   isMember: () => boolean;
 }
 
-// Create Auth Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Auth Provider Props
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Auth Provider Component
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize auth state from localStorage
+  const applySession = (nextToken: string, nextUser: User) => {
+    authService.setAuthData(nextToken, nextUser);
+    setToken(nextToken);
+    setUser(nextUser);
+  };
+
+  const clearSession = () => {
+    authService.clearAuthData();
+    setToken(null);
+    setUser(null);
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const { token: storedToken, user: storedUser } = authService.getAuthData();
-        
-        if (storedToken && storedUser) {
-          // In offline mode, use stored data without verification
-          if (process.env.REACT_APP_OFFLINE_MODE === 'true') {
-            clientLogger.debug('Offline mode: using stored auth data');
-            setToken(storedToken);
-            setUser(storedUser);
-            setIsLoading(false);
-            return;
-          }
-          
-            // Verify token is still valid
-            try {
-              const response = await authService.verifyToken();
-              if (response.success && response.data) {
-                setToken(storedToken);
-                setUser(response.data.user);
-              } else {
-                // Token is invalid, clear auth data
-              clientLogger.debug('Token verification failed, clearing auth data');
-                authService.clearAuthData();
-              setToken(null);
-              setUser(null);
-              }
-          } catch (error: any) {
-            // If backend is not available or verification fails, clear auth data to prevent loops
-            console.warn('Token verification error:', error?.message || error);
-            console.warn('Clearing auth data to prevent redirect loops');
-            authService.clearAuthData();
-            setToken(null);
-            setUser(null);
-          }
+        const inMemorySession = authService.getAuthData();
+        if (inMemorySession.token && inMemorySession.user) {
+          applySession(inMemorySession.token, inMemorySession.user);
+          return;
+        }
+
+        if (window.location.pathname.includes('/login')) {
+          clearSession();
+          return;
+        }
+
+        const response = await authService.refreshToken();
+        if (response.success && response.data) {
+          applySession(response.data.token, response.data.user);
         } else {
-          // No stored auth data
-          setToken(null);
-          setUser(null);
+          clearSession();
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
-        authService.clearAuthData();
-        setToken(null);
-        setUser(null);
+        clientLogger.debug('No active browser session to restore');
+        clearSession();
       } finally {
         setIsLoading(false);
       }
     };
 
+    const handleExpiredSession = () => clearSession();
+    window.addEventListener('dms:auth-expired', handleExpiredSession);
     initializeAuth();
+
+    return () => window.removeEventListener('dms:auth-expired', handleExpiredSession);
   }, []);
 
-  // Login function
-  const login = async (email: string, password: string, adminLogin: boolean = false): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string,
+    adminLogin = false
+  ): Promise<boolean> => {
     try {
       setIsLoading(true);
       const response = await authService.login({ email, password, adminLogin });
-      
+
       if (response.success && response.data) {
-        const { token: newToken, user: userData, refreshToken } = response.data;
-        
-        // Store auth data
-        authService.setAuthData(newToken, userData, refreshToken);
-        setToken(newToken);
-        setUser(userData);
-        
+        applySession(response.data.token, response.data.user);
         toast.success('Login successful!');
         return true;
       }
-      
-      // Show error message if available
-      if (response.message) {
-        toast.error(response.message);
-      }
-      
+
+      if (response.message) toast.error(response.message);
       return false;
     } catch (error: any) {
-      console.error('Login error:', error);
-      
-      // Prefer backend validation message (e.g. "Please provide a valid email address") over generic "Network Error"
       const data = error?.response?.data;
       const validationMsg = data?.errors?.[0]?.msg || data?.errors?.[0]?.message;
       const serverMsg = data?.message;
-      const fallback = error?.message === 'Network Error' || error?.message === 'network Error'
+      const fallback = error?.message === 'Network Error'
         ? 'Cannot reach server. Check your connection or try again.'
         : (error?.message || 'Login failed. Please check your credentials.');
-      const errorMessage = validationMsg || serverMsg || fallback;
-      toast.error(errorMessage);
-      
+      toast.error(validationMsg || serverMsg || fallback);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Register function
   const register = async (userData: {
     email: string;
     password: string;
@@ -151,129 +126,84 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       const response = await authService.register(userData);
-      
       if (response.success) {
         toast.success('Registration successful! Please login.');
         return true;
       }
-      
-      // Show error message from response
-      const errorMessage = response.message || 'Registration failed';
-      toast.error(errorMessage);
+
+      toast.error(response.message || 'Registration failed');
       return false;
     } catch (error: any) {
-      console.error('Registration error:', error);
-      // Prefer backend validation message over generic "Network Error"
       const data = error?.response?.data;
       const validationMsg = data?.errors?.[0]?.msg || data?.errors?.[0]?.message;
       const serverMsg = data?.message;
-      const fallback = error?.message === 'Network Error' || error?.message === 'network Error'
+      const fallback = error?.message === 'Network Error'
         ? 'Cannot reach server. Check your connection or try again.'
         : (error?.message || 'Registration failed. Please check your input.');
-      const errorMessage = validationMsg || serverMsg || fallback;
-      toast.error(errorMessage);
+      toast.error(validationMsg || serverMsg || fallback);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Logout function
   const logout = async (): Promise<void> => {
     try {
       await authService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      clientLogger.warn('Server logout failed; clearing the local session');
     } finally {
-      // Clear auth data regardless of API call success
-      authService.clearAuthData();
-      setToken(null);
-      setUser(null);
+      clearSession();
       toast.success('Logged out successfully');
     }
   };
 
-  // Refresh token function
   const refreshToken = async (): Promise<boolean> => {
     try {
-      const { refreshToken: storedRefreshToken } = authService.getAuthData();
-      
-      if (!storedRefreshToken) {
-        return false;
-      }
-
-      const response = await authService.refreshToken(storedRefreshToken);
-      
+      const response = await authService.refreshToken();
       if (response.success && response.data) {
-        const { token: newToken } = response.data;
-        
-        // Update token in localStorage and state
-        localStorage.setItem('token', newToken);
-        setToken(newToken);
-        
+        applySession(response.data.token, response.data.user);
         return true;
       }
-      
-      return false;
     } catch (error) {
-      console.error('Token refresh error:', error);
-      // If refresh fails, logout user
-      await logout();
-      return false;
+      clientLogger.debug('Session refresh failed');
     }
+
+    clearSession();
+    return false;
   };
 
-  // Update user function
   const updateUser = (userData: Partial<User>): void => {
-    if (user) {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    }
+    if (!user || !token) return;
+    applySession(token, { ...user, ...userData });
   };
 
-  // Role checking functions
-  const hasRole = (role: string): boolean => {
-    return user?.role === role;
-  };
-
-  const isPlatformOwner = (): boolean => {
-    return hasRole('platform_owner');
-  };
-
-  const isOrganizationAdmin = (): boolean => {
-    return hasRole('organization_admin');
-  };
-
-  const isMember = (): boolean => {
-    return hasRole('member');
-  };
-
-  // Context value
-  const contextValue: AuthContextType = {
-    user,
-    token,
-    isAuthenticated: !!token && !!user,
-    isLoading,
-    login,
-    register,
-    logout,
-    refreshToken,
-    updateUser,
-    hasRole,
-    isPlatformOwner,
-    isOrganizationAdmin,
-    isMember,
-  };
+  const hasRole = (role: string): boolean => user?.role === role;
+  const isPlatformOwner = (): boolean => hasRole('platform_owner');
+  const isOrganizationAdmin = (): boolean => hasRole('organization_admin');
+  const isMember = (): boolean => hasRole('member');
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      isAuthenticated: !!token && !!user,
+      isLoading,
+      login,
+      register,
+      logout,
+      refreshToken,
+      updateUser,
+      hasRole,
+      isPlatformOwner,
+      isOrganizationAdmin,
+      isMember,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to use Auth Context
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {

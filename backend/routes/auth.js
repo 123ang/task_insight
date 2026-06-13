@@ -1,341 +1,422 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { executeQuery } = require('../config/database');
+const { executeQuery, getConnection } = require('../config/database');
+const { getJwtSecret } = require('../config/security');
 const { verifyToken } = require('../middleware/auth');
 const { validateUserRegistration, validateUserLogin } = require('../middleware/validation');
+const { createSessionTokens, tokenHashesMatch } = require('../utils/authSessions');
+const { logger } = require('../utils/logger');
 
 const router = express.Router();
+const REFRESH_COOKIE = 'dms_refresh_token';
 
-// Register new user
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  path: '/api/auth',
+});
+
+const readCookie = (req, name) => {
+  const header = req.headers.cookie;
+  if (!header) return null;
+
+  const prefix = `${name}=`;
+  const pair = header.split(';').map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+
+  return pair ? decodeURIComponent(pair.slice(prefix.length)) : null;
+};
+
+const clearRefreshCookie = (res) => {
+  res.clearCookie(REFRESH_COOKIE, cookieOptions());
+};
+
+const setRefreshCookie = (res, token, expiresAt) => {
+  res.cookie(REFRESH_COOKIE, token, {
+    ...cookieOptions(),
+    expires: expiresAt,
+  });
+};
+
+const publicUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  firstName: user.first_name,
+  lastName: user.last_name,
+  role: user.role,
+  organizationId: user.organization_id,
+  organizationName: user.organization_name,
+  status: user.status,
+});
+
+const registrationError = (message, status = 400) => {
+  const error = new Error(message);
+  error.status = status;
+  error.isPublic = true;
+  return error;
+};
+
 router.post('/register', validateUserRegistration, async (req, res) => {
-  try {
-    const { email, password, firstName, lastName, organizationId, invitationCode } = req.body;
+  const { email, password, firstName, lastName, invitationCode } = req.body;
 
-    // Check if user already exists
-    const existingUser = await executeQuery(
-      'SELECT id FROM users WHERE email = ?',
+  if (!invitationCode || !invitationCode.trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'A valid invitation code is required',
+    });
+  }
+
+  let connection;
+  try {
+    connection = await getConnection();
+    await connection.beginTransaction();
+
+    const [existingUsers] = await connection.execute(
+      'SELECT id FROM users WHERE email = ? FOR UPDATE',
       [email]
     );
-
-    if (existingUser.success && existingUser.data.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'User with this email already exists'
-      });
+    if (existingUsers.length > 0) {
+      throw registrationError('User with this email already exists');
     }
 
-    // Validate invitation code if provided
-    let orgId = organizationId;
-    let userRole = 'member'; // Default role
-    if (invitationCode) {
-      // Check invitation code in organizations table
-      const orgResult = await executeQuery(
-        'SELECT id, invitation_code, invitation_role, invitation_expires_at, status FROM organizations WHERE invitation_code = ? AND status = "active"',
-        [invitationCode.trim().toUpperCase()]
-      );
-
-      if (!orgResult.success || orgResult.data.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid invitation code'
-        });
-      }
-
-      const org = orgResult.data[0];
-
-      // Check if invitation code has expired
-      if (org.invitation_expires_at && new Date(org.invitation_expires_at) < new Date()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invitation code has expired'
-        });
-      }
-
-      // Link user to organization via invitation code
-      orgId = org.id;
-      // Use the role specified in the invitation code, or default to 'member'
-      userRole = org.invitation_role || 'member';
-    }
-
-    // Ensure organization ID is set
-    if (!orgId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Organization ID or invitation code is required'
-      });
-    }
-
-    // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create user with role from invitation code
-    const userResult = await executeQuery(
-      'INSERT INTO users (email, password_hash, first_name, last_name, organization_id, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [email, hashedPassword, firstName, lastName, orgId, userRole, 'active']
+    const [invitations] = await connection.execute(
+      `SELECT i.id, i.organization_id, i.role, i.expires_at, i.max_uses, i.use_count,
+              i.revoked_at, o.status AS organization_status
+       FROM invitation_codes i
+       INNER JOIN organizations o ON o.id = i.organization_id
+       WHERE i.code = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [invitationCode.trim().toUpperCase()]
     );
 
-    if (!userResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to create user'
-      });
+    const invitation = invitations[0];
+    if (
+      !invitation ||
+      invitation.revoked_at ||
+      invitation.organization_status !== 'active' ||
+      new Date(invitation.expires_at) <= new Date() ||
+      Number(invitation.use_count) >= Number(invitation.max_uses)
+    ) {
+      throw registrationError('Invitation code is invalid, expired, or fully used');
     }
 
-    // Note: Invitation code can be used multiple times - no tracking needed
-    // Users are automatically linked to the organization via the invitation code
-
-    // Log user creation
-    await executeQuery(
-      'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userResult.data.insertId, orgId, 'CREATE', 'USER', userResult.data.insertId, JSON.stringify({ email, organizationId: orgId })]
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const [userResult] = await connection.execute(
+      `INSERT INTO users
+        (email, password_hash, first_name, last_name, organization_id, role, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        email,
+        hashedPassword,
+        firstName,
+        lastName,
+        invitation.organization_id,
+        invitation.role || 'member',
+        'active',
+      ]
     );
 
-    res.status(201).json({
+    const [consumeResult] = await connection.execute(
+      `UPDATE invitation_codes
+       SET use_count = use_count + 1
+       WHERE id = ?
+         AND revoked_at IS NULL
+         AND use_count < max_uses`,
+      [invitation.id]
+    );
+    if (consumeResult.affectedRows !== 1) {
+      throw registrationError('Invitation code is no longer available');
+    }
+
+    await connection.execute(
+      `INSERT INTO audit_logs
+        (user_id, organization_id, action, resource_type, resource_id, details)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        userResult.insertId,
+        invitation.organization_id,
+        'CREATE',
+        'USER',
+        userResult.insertId,
+        JSON.stringify({
+          email,
+          organizationId: invitation.organization_id,
+          invitationId: invitation.id,
+        }),
+      ]
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
       success: true,
       message: 'User registered successfully',
       data: {
-        userId: userResult.data.insertId,
+        userId: userResult.insertId,
         email,
         firstName,
-        lastName
-      }
+        lastName,
+      },
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
+
+    if (error.isPublic) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    logger.error('Registration error', { error: logger.serializeError(error) });
+    return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
     });
+  } finally {
+    connection?.release();
   }
 });
 
-// Login user
 router.post('/login', validateUserLogin, async (req, res) => {
   try {
     const { email, password, adminLogin } = req.body;
-
-    // Find user
     const userResult = await executeQuery(
-      'SELECT u.*, o.name as organization_name FROM users u LEFT JOIN organizations o ON u.organization_id = o.id WHERE u.email = ?',
+      `SELECT u.*, o.name AS organization_name
+       FROM users u
+       LEFT JOIN organizations o ON u.organization_id = o.id
+       WHERE u.email = ?`,
       [email]
     );
 
     if (!userResult.success || userResult.data.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     const user = userResult.data[0];
-
-    // Check if user is active
     if (user.status !== 'active') {
       return res.status(401).json({
         success: false,
-        message: 'Account is inactive. Please contact support.'
+        message: 'Account is inactive. Please contact support.',
       });
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+    if (!await bcrypt.compare(password, user.password_hash)) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Check admin login requirement
     if (adminLogin && !['organization_admin', 'platform_owner'].includes(user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Admin access required'
-      });
+      return res.status(403).json({ success: false, message: 'Admin access required' });
     }
 
-    // Generate JWT tokens
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
-        role: user.role,
-        organizationId: user.organization_id 
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+    const tokens = createSessionTokens({ user, secret: getJwtSecret() });
+    const sessionResult = await executeQuery(
+      `INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      [
+        tokens.session.id,
+        tokens.session.userId,
+        tokens.session.tokenHash,
+        tokens.session.expiresAt,
+      ]
     );
+    if (!sessionResult.success) {
+      throw new Error('Failed to create authentication session');
+    }
 
-    const refreshToken = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
-    );
-
-    // Update last login
+    await executeQuery('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
     await executeQuery(
-      'UPDATE users SET last_login = NOW() WHERE id = ?',
-      [user.id]
+      `INSERT INTO audit_logs
+        (user_id, organization_id, action, resource_type, resource_id, details)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        user.id,
+        user.organization_id,
+        'LOGIN',
+        'USER',
+        user.id,
+        JSON.stringify({ email, adminLogin: !!adminLogin }),
+      ]
     );
 
-    // Log login
-    await executeQuery(
-      'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [user.id, user.organization_id, 'LOGIN', 'USER', user.id, JSON.stringify({ email, adminLogin: !!adminLogin })]
-    );
-
-    res.json({
+    setRefreshCookie(res, tokens.refreshToken, tokens.session.expiresAt);
+    return res.json({
       success: true,
       message: 'Login successful',
       data: {
-        token,
-        refreshToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          role: user.role,
-          organizationId: user.organization_id,
-          organizationName: user.organization_name,
-          status: user.status
-        }
-      }
+        token: tokens.accessToken,
+        user: publicUser(user),
+      },
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    logger.error('Login error', { error: logger.serializeError(error) });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
-// Refresh token
 router.post('/refresh', async (req, res) => {
+  const refreshToken = readCookie(req, REFRESH_COOKIE);
+  if (!refreshToken) {
+    clearRefreshCookie(res);
+    return res.status(401).json({ success: false, message: 'Refresh session required' });
+  }
+
   try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(401).json({
-        success: false,
-        message: 'Refresh token required'
-      });
+    const decoded = jwt.verify(refreshToken, getJwtSecret());
+    if (decoded.kind !== 'refresh' || !decoded.sid || !decoded.userId) {
+      throw new Error('Invalid refresh token type');
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-    
-    // Check if user still exists and is active
-    const userResult = await executeQuery(
-      'SELECT id, email, role, organization_id, status FROM users WHERE id = ? AND status = "active"',
-      [decoded.userId]
+    const sessionResult = await executeQuery(
+      `SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.revoked_at,
+              s.replaced_by_session_id, u.email, u.first_name, u.last_name, u.role,
+              u.organization_id, u.status, o.name AS organization_name
+       FROM auth_sessions s
+       INNER JOIN users u ON u.id = s.user_id
+       LEFT JOIN organizations o ON o.id = u.organization_id
+       WHERE s.id = ? AND s.user_id = ?
+       LIMIT 1`,
+      [decoded.sid, decoded.userId]
     );
+    const session = sessionResult.success ? sessionResult.data[0] : null;
 
-    if (!userResult.success || userResult.data.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid refresh token'
-      });
+    if (
+      !session ||
+      session.status !== 'active' ||
+      session.revoked_at ||
+      new Date(session.expires_at) <= new Date() ||
+      !tokenHashesMatch(refreshToken, session.token_hash)
+    ) {
+      if (session?.replaced_by_session_id) {
+        await executeQuery(
+          'UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, NOW()) WHERE id IN (?, ?)',
+          [session.id, session.replaced_by_session_id]
+        );
+      }
+      clearRefreshCookie(res);
+      return res.status(401).json({ success: false, message: 'Refresh session is invalid' });
     }
 
-    const user = userResult.data[0];
+    const user = {
+      id: session.user_id,
+      email: session.email,
+      first_name: session.first_name,
+      last_name: session.last_name,
+      role: session.role,
+      organization_id: session.organization_id,
+      organization_name: session.organization_name,
+      status: session.status,
+    };
+    const nextTokens = createSessionTokens({ user, secret: getJwtSecret() });
+    const connection = await getConnection();
 
-    // Generate new token
-    const newToken = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
-        role: user.role,
-        organizationId: user.organization_id 
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-    );
+    try {
+      await connection.beginTransaction();
+      const [revokeResult] = await connection.execute(
+        `UPDATE auth_sessions
+         SET revoked_at = NOW(), replaced_by_session_id = ?
+         WHERE id = ? AND revoked_at IS NULL`,
+        [nextTokens.session.id, session.id]
+      );
+      if (revokeResult.affectedRows !== 1) {
+        throw new Error('Refresh session was already rotated');
+      }
 
-    res.json({
+      await connection.execute(
+        `INSERT INTO auth_sessions (id, user_id, token_hash, expires_at)
+         VALUES (?, ?, ?, ?)`,
+        [
+          nextTokens.session.id,
+          nextTokens.session.userId,
+          nextTokens.session.tokenHash,
+          nextTokens.session.expiresAt,
+        ]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback().catch(() => {});
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    setRefreshCookie(res, nextTokens.refreshToken, nextTokens.session.expiresAt);
+    return res.json({
       success: true,
       message: 'Token refreshed successfully',
       data: {
-        token: newToken
-      }
+        token: nextTokens.accessToken,
+        user: publicUser(user),
+      },
     });
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Refresh token expired'
-      });
-    }
-    
-    res.status(401).json({
+    clearRefreshCookie(res);
+    return res.status(401).json({
       success: false,
-      message: 'Invalid refresh token'
+      message: error.name === 'TokenExpiredError'
+        ? 'Refresh session expired'
+        : 'Refresh session is invalid',
     });
   }
 });
 
-// Logout user
-router.post('/logout', verifyToken, async (req, res) => {
+router.post('/logout', async (req, res) => {
+  const refreshToken = readCookie(req, REFRESH_COOKIE);
+
   try {
-    // Log logout
-    await executeQuery(
-      'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, req.user.organization_id, 'LOGOUT', 'USER', req.user.id, JSON.stringify({ email: req.user.email })]
-    );
-
-    res.json({
-      success: true,
-      message: 'Logout successful'
-    });
+    if (refreshToken) {
+      const decoded = jwt.verify(refreshToken, getJwtSecret());
+      if (decoded.kind === 'refresh' && decoded.sid && decoded.userId) {
+        await executeQuery(
+          `UPDATE auth_sessions
+           SET revoked_at = COALESCE(revoked_at, NOW())
+           WHERE id = ? AND user_id = ?`,
+          [decoded.sid, decoded.userId]
+        );
+      }
+    }
   } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    logger.debug('Logout received an expired or invalid refresh cookie');
+  } finally {
+    clearRefreshCookie(res);
   }
+
+  return res.json({ success: true, message: 'Logout successful' });
 });
 
-// Get current user profile
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const userResult = await executeQuery(
-      'SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status, u.created_at, u.last_login, o.name as organization_name FROM users u LEFT JOIN organizations o ON u.organization_id = o.id WHERE u.id = ?',
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status,
+              u.created_at, u.last_login, o.name AS organization_name
+       FROM users u
+       LEFT JOIN organizations o ON u.organization_id = o.id
+       WHERE u.id = ?`,
       [req.user.id]
     );
 
     if (!userResult.success || userResult.data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.json({
-      success: true,
-      data: userResult.data[0]
-    });
+    return res.json({ success: true, data: userResult.data[0] });
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    logger.error('Profile error', { error: logger.serializeError(error) });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
-// Verify token endpoint
 router.get('/verify', verifyToken, (req, res) => {
   res.json({
     success: true,
     message: 'Token is valid',
-    data: {
-      user: req.user
-    }
+    data: { user: req.user },
   });
 });
-
 
 module.exports = router;

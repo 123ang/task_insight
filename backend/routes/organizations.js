@@ -30,19 +30,27 @@ router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateS
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-    // Get organizations with pagination and invitation codes (from organizations table)
+    // Include the newest active invitation for the platform-owner table.
     const orgsQuery = `
       SELECT o.id, o.name, o.description, o.storage_quota, o.storage_used, o.status,
-             o.invitation_code, o.invitation_role, o.invitation_expires_at, o.invitation_generated_by,
+             MAX(i.id) as invitation_id,
+             SUBSTRING_INDEX(GROUP_CONCAT(i.code ORDER BY i.created_at DESC), ',', 1) as invitation_code,
+             SUBSTRING_INDEX(GROUP_CONCAT(i.role ORDER BY i.created_at DESC), ',', 1) as invitation_role,
+             MAX(i.expires_at) as invitation_expires_at,
+             MAX(i.generated_by) as invitation_generated_by,
              o.created_at, o.updated_at,
              COUNT(DISTINCT u.id) as user_count,
              COALESCE(SUM(f.file_size), 0) as calculated_storage_used
       FROM organizations o 
       LEFT JOIN users u ON o.id = u.organization_id AND u.status = 'active'
       LEFT JOIN files f ON o.id = f.organization_id AND f.status = 'active'
+      LEFT JOIN invitation_codes i
+        ON i.organization_id = o.id
+       AND i.revoked_at IS NULL
+       AND i.expires_at > NOW()
+       AND i.use_count < i.max_uses
       ${whereClause}
       GROUP BY o.id, o.name, o.description, o.storage_quota, o.storage_used, o.status,
-               o.invitation_code, o.invitation_role, o.invitation_expires_at, o.invitation_generated_by,
                o.created_at, o.updated_at
       ORDER BY o.created_at DESC 
       LIMIT ${parseInt(limit)} OFFSET ${offset}
@@ -88,6 +96,7 @@ router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateS
       userCount: org.user_count || 0,
       createdAt: org.created_at,
       updatedAt: org.updated_at,
+      invitationId: org.invitation_id || null,
       invitationCode: org.invitation_code || null,
       invitationRole: org.invitation_role || null,
       invitationExpiresAt: org.invitation_expires_at || null,
@@ -179,7 +188,7 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
       });
     }
 
-    // Generate a unique invitation code
+    // Generate a unique invitation code for the first organization member.
     let invitationCode;
     let isUnique = false;
     let attempts = 0;
@@ -190,7 +199,7 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
       
       // Check if code already exists
       const codeCheck = await executeQuery(
-        'SELECT id FROM organizations WHERE invitation_code = ?',
+        'SELECT id FROM invitation_codes WHERE code = ?',
         [invitationCode]
       );
 
@@ -207,16 +216,29 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
       });
     }
 
-    // Create organization with invitation code
+    // Create the organization, then create its single-use onboarding invitation.
     const orgResult = await executeQuery(
-      'INSERT INTO organizations (name, description, storage_quota, status, invitation_code, invitation_role) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, description, storageQuota || 5368709120, 'active', invitationCode, 'member']
+      'INSERT INTO organizations (name, description, storage_quota, status) VALUES (?, ?, ?, ?)',
+      [name, description, storageQuota || 5368709120, 'active']
     );
 
     if (!orgResult.success) {
       return res.status(500).json({
         success: false,
         message: 'Failed to create organization'
+      });
+    }
+
+    const invitationResult = await executeQuery(
+      `INSERT INTO invitation_codes
+        (code, organization_id, role, expires_at, max_uses, generated_by)
+       VALUES (?, ?, 'member', DATE_ADD(NOW(), INTERVAL 7 DAY), 1, ?)`,
+      [invitationCode, orgResult.data.insertId, req.user.id]
+    );
+    if (!invitationResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Organization created, but its invitation could not be generated'
       });
     }
 
@@ -234,7 +256,8 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
         name,
         description,
         storageQuota: storageQuota || 5368709120,
-        invitationCode
+        invitationCode,
+        invitationId: invitationResult.data.insertId
       }
     });
   } catch (error) {

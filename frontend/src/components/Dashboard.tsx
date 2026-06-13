@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFiles } from '../contexts/FileContext';
 import { fileService, FileItem, Folder, FileFilters } from '../services/fileService';
 import { reminderService, TodoDocument, TodoSummary, Reminder } from '../services/reminderService';
+import { getAccessToken } from '../services/api';
 import FileSharingModal from './FileSharingModal';
 import FilePreviewModal from './FilePreviewModal';
 import ReminderModal from './ReminderModal';
@@ -18,7 +19,7 @@ const ImageThumbnail: React.FC<{ fileId: number; fileName: string; fileType: str
     const loadThumbnail = async () => {
       try {
         const baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
-        const token = localStorage.getItem('token');
+        const token = getAccessToken();
         
         if (!token) {
           setHasError(true);
@@ -28,7 +29,8 @@ const ImageThumbnail: React.FC<{ fileId: number; fileName: string; fileType: str
         const response = await fetch(`${baseUrl}/files/${fileId}/preview`, {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          credentials: 'include',
         });
 
         if (response.ok) {

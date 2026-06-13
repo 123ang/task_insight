@@ -190,8 +190,8 @@ describe('Login Component', () => {
     await user.type(getInputById('register-firstname'), 'John');
     await user.type(getInputById('register-lastname'), 'Doe');
     await user.type(getInputById('register-email'), 'john@example.com');
-    await user.type(getInputById('register-password'), 'password123');
-    await user.type(getInputById('register-confirm'), 'different123');
+    await user.type(getInputById('register-password'), 'Password12345');
+    await user.type(getInputById('register-confirm'), 'Different12345');
 
     const registerForm = document.getElementById('register-form') as HTMLElement;
     const registerButton = within(registerForm).getByRole('button', { name: /join organization/i });

@@ -96,7 +96,7 @@ const validateUploadedFile = (file, policy = {}) => {
   const allowedMimeTypes = getAllowedMimeTypes(allowedExtensions, policy);
   const extension = getFileExtension(file.originalname);
   const mimeType = String(file.mimetype || '').toLowerCase();
-  const maxSize = Number(policy.maxFileSize || process.env.MAX_FILE_SIZE || 2 * 1024 * 1024 * 1024);
+  const maxSize = Number(policy.maxFileSize || process.env.MAX_FILE_SIZE || 100 * 1024 * 1024);
 
   if (!extension) {
     return { success: false, message: 'Uploaded file must include a file extension.' };

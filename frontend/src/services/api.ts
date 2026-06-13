@@ -6,6 +6,14 @@ import { clientLogger } from '../utils/logger';
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 const API_TIMEOUT = parseInt(process.env.REACT_APP_API_TIMEOUT || '30000');
 const OFFLINE_MODE = process.env.REACT_APP_OFFLINE_MODE === 'true' || process.env.REACT_APP_DISABLE_API_CALLS === 'true' || false;
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+};
+
+export const getAccessToken = () => accessToken;
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -14,6 +22,7 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
   // DO NOT use transformRequest - it interferes with axios's automatic JSON serialization
   // FormData handling is done in the request interceptor instead
 });
@@ -21,9 +30,8 @@ const api: AxiosInstance = axios.create({
 // Request interceptor to add auth token and handle FormData
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
     
     // Handle FormData - delete Content-Type to let browser set it with boundary
@@ -57,11 +65,36 @@ api.interceptors.request.use(
 );
 
 // Response interceptor for error handling
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      undefined,
+      {
+        timeout: API_TIMEOUT,
+        withCredentials: true,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    ).then((response) => {
+      const token = response.data?.data?.token || null;
+      setAccessToken(token);
+      return token;
+    }).catch(() => {
+      setAccessToken(null);
+      return null;
+    }).finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+};
+
 api.interceptors.response.use(
   (response: AxiosResponse) => {
     return response;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     const { response } = error;
     
     if (response) {
@@ -70,18 +103,31 @@ api.interceptors.response.use(
       
       switch (status) {
         case 401:
-          // Unauthorized - clear token
-          // Don't use window.location.href as it causes hard refresh
-          // Let React Router handle the redirect
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          localStorage.removeItem('refreshToken');
+          const originalRequest = error.config as typeof error.config & { _retry?: boolean };
+          const requestUrl = originalRequest?.url || '';
+          const isAuthLifecycleRequest = [
+            '/auth/login',
+            '/auth/register',
+            '/auth/refresh',
+            '/auth/logout',
+          ].some((path) => requestUrl.includes(path));
+
+          if (originalRequest && !originalRequest._retry && !isAuthLifecycleRequest) {
+            originalRequest._retry = true;
+            const nextToken = await refreshAccessToken();
+            if (nextToken) {
+              originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+              return api(originalRequest);
+            }
+          }
+
+          setAccessToken(null);
+          window.dispatchEvent(new CustomEvent('dms:auth-expired'));
           // Only show toast if not already on login page
           if (!window.location.pathname.includes('/login')) {
             toast.error('Session expired. Please login again.');
-            // Use setTimeout to allow React Router to handle navigation
             setTimeout(() => {
-          window.location.href = '/login';
+              window.location.href = '/login';
             }, 100);
           }
           break;

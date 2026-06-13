@@ -579,12 +579,11 @@ If you encounter issues not covered in this manual:
 - Maximum single file: Configured by admin
 - Supported formats: All common document types
 
-### Demo Credentials
+### Test Accounts
 
-For testing purposes:
-- **Member**: member@demo.com / member123
-- **Org Admin**: admin@demo.com / admin123
-- **Platform Owner**: owner@taskinsight.com / admin123
+Demo credentials are not shipped with the application. Administrators should
+create test users with generated temporary passwords and force a reset before
+any shared demo.
 
 ---
 

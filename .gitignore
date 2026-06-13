@@ -1,1 +1,33 @@
 .DS_Store
+
+# Dependencies and build output
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+build/
+dist/
+coverage/
+
+# Runtime and local config
+.env
+.env.*
+!.env.example
+logs/
+*.log
+npm-debug.log*
+
+# Local uploads and exports
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/
+*.sql
+!backend/migrations/
+!backend/migrations/*.sql
+*.zip
+*.tar
+*.tar.gz
+
+# OS/editor files
+Thumbs.db
+.vscode/
+.idea/

@@ -1,6 +1,10 @@
-import { apiService, ApiResponse } from './api';
+import {
+  apiService,
+  ApiResponse,
+  getAccessToken,
+  setAccessToken,
+} from './api';
 
-// Types
 export interface User {
   id: number;
   email: string;
@@ -21,7 +25,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
-  refreshToken: string;
   user: User;
 }
 
@@ -41,99 +44,63 @@ export interface RegisterResponse {
   lastName: string;
 }
 
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
 export interface RefreshTokenResponse {
   token: string;
+  user: User;
 }
 
-// Auth Service
+let currentUser: User | null = null;
+
 export const authService = {
-  // Login user
   login: async (credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
     return apiService.post<LoginResponse>('/auth/login', credentials);
   },
 
-  // Register user
   register: async (userData: RegisterRequest): Promise<ApiResponse<RegisterResponse>> => {
     return apiService.post<RegisterResponse>('/auth/register', userData);
   },
 
-  // Refresh token
-  refreshToken: async (refreshToken: string): Promise<ApiResponse<RefreshTokenResponse>> => {
-    return apiService.post<RefreshTokenResponse>('/auth/refresh', { refreshToken });
+  refreshToken: async (_legacyRefreshToken?: string): Promise<ApiResponse<RefreshTokenResponse>> => {
+    return apiService.post<RefreshTokenResponse>('/auth/refresh');
   },
 
-  // Logout user
   logout: async (): Promise<ApiResponse<void>> => {
     return apiService.post<void>('/auth/logout');
   },
 
-  // Get user profile
   getProfile: async (): Promise<ApiResponse<User>> => {
     return apiService.get<User>('/auth/profile');
   },
 
-  // Verify token
   verifyToken: async (): Promise<ApiResponse<{ user: User }>> => {
     return apiService.get<{ user: User }>('/auth/verify');
   },
 
-  // Store auth data in localStorage
-  setAuthData: (token: string, user: User, refreshToken?: string) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
-    }
+  // Authentication state is intentionally memory-only. The browser keeps only
+  // the rotating HttpOnly refresh cookie, which JavaScript cannot read.
+  setAuthData: (token: string, user: User) => {
+    setAccessToken(token);
+    currentUser = user;
   },
 
-  // Get auth data from localStorage
-  getAuthData: (): { token: string | null; user: User | null; refreshToken: string | null } => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    return {
-      token,
-      user: userStr ? JSON.parse(userStr) : null,
-      refreshToken,
-    };
-  },
+  getAuthData: (): { token: string | null; user: User | null; refreshToken: null } => ({
+    token: getAccessToken(),
+    user: currentUser,
+    refreshToken: null,
+  }),
 
-  // Clear auth data from localStorage
   clearAuthData: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('refreshToken');
+    setAccessToken(null);
+    currentUser = null;
   },
 
-  // Check if user is authenticated
-  isAuthenticated: (): boolean => {
-    const token = localStorage.getItem('token');
-    return !!token;
-  },
+  isAuthenticated: (): boolean => !!getAccessToken() && !!currentUser,
 
-  // Check if user has specific role
-  hasRole: (role: string): boolean => {
-    const { user } = authService.getAuthData();
-    return user?.role === role;
-  },
+  hasRole: (role: string): boolean => currentUser?.role === role,
 
-  // Check if user is platform owner
-  isPlatformOwner: (): boolean => {
-    return authService.hasRole('platform_owner');
-  },
+  isPlatformOwner: (): boolean => currentUser?.role === 'platform_owner',
 
-  // Check if user is organization admin
-  isOrganizationAdmin: (): boolean => {
-    return authService.hasRole('organization_admin');
-  },
+  isOrganizationAdmin: (): boolean => currentUser?.role === 'organization_admin',
 
-  // Check if user is member
-  isMember: (): boolean => {
-    return authService.hasRole('member');
-  },
+  isMember: (): boolean => currentUser?.role === 'member',
 };

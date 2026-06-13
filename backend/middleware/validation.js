@@ -1,12 +1,14 @@
 const { body, param, query, validationResult } = require('express-validator');
+const { validatePassword } = require('../utils/helpers');
+const { logger, redactSensitive } = require('../utils/logger');
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.error('❌ [VALIDATION] Validation errors:', {
+    logger.warn('Validation failed', {
       errors: errors.array(),
-      body: req.body,
+      body: redactSensitive(req.body),
       file: req.file ? { name: req.file.originalname, size: req.file.size } : 'no file'
     });
     return res.status(400).json({
@@ -25,8 +27,13 @@ const validateUserRegistration = [
     .normalizeEmail()
     .withMessage('Please provide a valid email address'),
   body('password')
-    .isLength({ min: 1 })
-    .withMessage('Password is required'),
+    .custom((value) => {
+      const result = validatePassword(value);
+      if (!result.isValid) {
+        throw new Error(result.errors.join('. '));
+      }
+      return true;
+    }),
   body('firstName')
     .trim()
     .isLength({ min: 1, max: 50 })

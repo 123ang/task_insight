@@ -2,8 +2,9 @@ jest.mock('../config/database', () => ({
   executeQuery: jest.fn()
 }));
 
+const jwt = require('jsonwebtoken');
 const { executeQuery } = require('../config/database');
-const { requireFileAccess } = require('../middleware/auth');
+const { requireFileAccess, verifyToken } = require('../middleware/auth');
 
 const createResponse = () => {
   const res = {};
@@ -139,5 +140,75 @@ describe('requireFileAccess', () => {
       id: 12,
       path: expect.stringContaining('owned.pdf')
     }));
+  });
+});
+
+describe('verifyToken session enforcement', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('accepts a typed access token only while its server session is active', async () => {
+    executeQuery.mockResolvedValue({
+      success: true,
+      data: [{
+        id: 42,
+        email: 'member@example.com',
+        role: 'member',
+        status: 'active',
+        organization_id: 5,
+      }],
+    });
+    const token = jwt.sign(
+      { kind: 'access', sid: 'session-1', userId: 42 },
+      'test-secret',
+      { expiresIn: '1h' }
+    );
+    const req = {
+      header: jest.fn(() => `Bearer ${token}`),
+    };
+
+    const { res, next } = await runMiddleware(verifyToken, req);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('INNER JOIN auth_sessions'),
+      [42, 'session-1']
+    );
+  });
+
+  it('rejects refresh tokens presented as bearer access tokens', async () => {
+    const token = jwt.sign(
+      { kind: 'refresh', sid: 'session-1', userId: 42 },
+      'test-secret',
+      { expiresIn: '1h' }
+    );
+    const req = {
+      header: jest.fn(() => `Bearer ${token}`),
+    };
+
+    const { res, next } = await runMiddleware(verifyToken, req);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects access tokens after their session is revoked', async () => {
+    executeQuery.mockResolvedValue({ success: true, data: [] });
+    const token = jwt.sign(
+      { kind: 'access', sid: 'revoked-session', userId: 42 },
+      'test-secret',
+      { expiresIn: '1h' }
+    );
+    const req = {
+      header: jest.fn(() => `Bearer ${token}`),
+    };
+
+    const { res, next } = await runMiddleware(verifyToken, req);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 });

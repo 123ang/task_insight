@@ -1,4 +1,4 @@
-import { apiService, ApiResponse, FilesPaginationResponse } from './api';
+import { apiService, ApiResponse, FilesPaginationResponse, getAccessToken } from './api';
 
 // Types
 export interface FileItem {
@@ -368,7 +368,8 @@ export const fileService = {
 
   // Zip files
   zipFiles: async (fileIds: number[], zipName?: string): Promise<void> => {
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
+    if (!token) throw new Error('Authentication session is not available');
     const baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
     
     const response = await fetch(`${baseUrl}/files/zip`, {
@@ -377,6 +378,7 @@ export const fileService = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
+      credentials: 'include',
       body: JSON.stringify({ fileIds, zipName: zipName || 'archive.zip' })
     });
 
@@ -424,14 +426,16 @@ export const fileService = {
 
   // Download folder as zip
   downloadFolder: async (folderId: number, folderName: string): Promise<void> => {
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
+    if (!token) throw new Error('Authentication session is not available');
     const baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
     
     const response = await fetch(`${baseUrl}/files/folders/${folderId}/download`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`
-      }
+      },
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -464,7 +468,8 @@ export const fileService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
+    if (!token) throw new Error('Authentication session is not available');
     const baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
     
     return new Promise((resolve, reject) => {
@@ -499,6 +504,7 @@ export const fileService = {
       xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
 
       xhr.open('POST', `${baseUrl}/files/${fileId}/versions`);
+      xhr.withCredentials = true;
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.send(formData);
     });

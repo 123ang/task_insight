@@ -72,6 +72,7 @@ jest.mock('../../services/auditService', () => ({
 
 jest.mock('../../services/authService', () => ({
   authService: {
+    setAuthData: jest.fn(),
     getAuthData: jest.fn(),
     verifyToken: jest.fn(),
     clearAuthData: jest.fn(),

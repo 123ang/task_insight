@@ -190,7 +190,7 @@ describe('Integration Tests', () => {
       await user.click(within(getPanelById('login-form')).getByRole('button', { name: /^sign in$/i }));
 
       await waitFor(() => {
-        expect(authService.setAuthData).toHaveBeenCalledWith('mock-token', testUser, 'mock-refresh-token');
+        expect(authService.setAuthData).toHaveBeenCalledWith('mock-token', testUser);
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard/my-drive');
       });
     });
@@ -205,8 +205,8 @@ describe('Integration Tests', () => {
       await user.type(getInputById('register-firstname'), 'John');
       await user.type(getInputById('register-lastname'), 'Doe');
       await user.type(getInputById('register-email'), 'john@example.com');
-      await user.type(getInputById('register-password'), 'password123');
-      await user.type(getInputById('register-confirm'), 'password123');
+      await user.type(getInputById('register-password'), 'Password12345');
+      await user.type(getInputById('register-confirm'), 'Password12345');
       await user.click(within(getPanelById('register-form')).getByRole('button', { name: /join organization/i }));
 
       await waitFor(() => {
@@ -273,7 +273,7 @@ describe('Integration Tests', () => {
       await user.type(getInputById('register-confirm'), '123');
       await user.click(within(getPanelById('register-form')).getByRole('button', { name: /join organization/i }));
 
-      expect(toast.error).toHaveBeenCalledWith('Password must be at least 6 characters long');
+      expect(toast.error).toHaveBeenCalledWith('Password must be at least 12 characters long');
       expect(authService.register).not.toHaveBeenCalled();
     });
   });
@@ -301,8 +301,8 @@ describe('Integration Tests', () => {
       await user.type(getInputById('register-firstname'), 'John');
       await user.type(getInputById('register-lastname'), 'Doe');
       await user.type(getInputById('register-email'), 'john@example.com');
-      await user.type(getInputById('register-password'), 'password123');
-      await user.type(getInputById('register-confirm'), 'password123');
+      await user.type(getInputById('register-password'), 'Password12345');
+      await user.type(getInputById('register-confirm'), 'Password12345');
       await user.click(within(getPanelById('register-form')).getByRole('button', { name: /join organization/i }));
 
       expect(await screen.findByText(/registering/i)).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { authService } from '../authService';
-import { apiService } from '../api';
+import { apiService, getAccessToken, setAccessToken } from '../api';
 
 // Mock the apiService
 jest.mock('../api', () => ({
@@ -7,6 +7,8 @@ jest.mock('../api', () => ({
     post: jest.fn(),
     get: jest.fn(),
   },
+  getAccessToken: jest.fn(),
+  setAccessToken: jest.fn(),
 }));
 
 // Mock localStorage
@@ -35,6 +37,9 @@ describe('authService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorageMock.clear();
+    (getAccessToken as jest.Mock).mockReturnValue(null);
+    authService.clearAuthData();
+    jest.clearAllMocks();
   });
 
   describe('login', () => {
@@ -187,9 +192,7 @@ describe('authService', () => {
 
       const result = await authService.refreshToken('old-refresh-token');
 
-      expect(apiService.post).toHaveBeenCalledWith('/auth/refresh', {
-        refreshToken: 'old-refresh-token',
-      });
+      expect(apiService.post).toHaveBeenCalledWith('/auth/refresh');
       expect(result).toEqual(mockResponse);
       expect(localStorageMock.getItem('token')).toBeNull();
       expect(localStorageMock.getItem('refreshToken')).toBe('old-refresh-token');
@@ -197,16 +200,24 @@ describe('authService', () => {
   });
 
   describe('getAuthData', () => {
-    it('retrieves stored auth data', () => {
-      localStorageMock.setItem('token', 'test-token');
-      localStorageMock.setItem('refreshToken', 'test-refresh-token');
-      localStorageMock.setItem('user', JSON.stringify({ id: 1, email: 'test@example.com' }));
+    it('retrieves in-memory auth data without exposing a refresh token', () => {
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        role: 'member',
+        status: 'active',
+      };
+      (getAccessToken as jest.Mock).mockReturnValue('test-token');
+      authService.setAuthData('test-token', user);
 
       const authData = authService.getAuthData();
 
       expect(authData.token).toBe('test-token');
-      expect(authData.refreshToken).toBe('test-refresh-token');
-      expect(authData.user).toEqual({ id: 1, email: 'test@example.com' });
+      expect(authData.refreshToken).toBeNull();
+      expect(authData.user).toEqual(user);
+      expect(setAccessToken).toHaveBeenCalledWith('test-token');
     });
 
     it('returns null values when no auth data is stored', () => {
@@ -219,13 +230,19 @@ describe('authService', () => {
   });
 
   describe('clearAuthData', () => {
-    it('clears all stored auth data', () => {
-      localStorageMock.setItem('token', 'test-token');
-      localStorageMock.setItem('refreshToken', 'test-refresh-token');
-      localStorageMock.setItem('user', JSON.stringify({ id: 1 }));
+    it('clears all in-memory auth data', () => {
+      authService.setAuthData('test-token', {
+        id: 1,
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        role: 'member',
+        status: 'active',
+      });
 
       authService.clearAuthData();
 
+      expect(setAccessToken).toHaveBeenLastCalledWith(null);
       expect(localStorageMock.getItem('token')).toBeNull();
       expect(localStorageMock.getItem('refreshToken')).toBeNull();
       expect(localStorageMock.getItem('user')).toBeNull();

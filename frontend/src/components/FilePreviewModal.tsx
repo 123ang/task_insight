@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fileService, FileItem } from '../services/fileService';
+import { getAccessToken } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface FilePreviewModalProps {
@@ -23,7 +24,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
           fileType.includes('pdf') || fileType.includes('mp4') || fileType.includes('avi') || fileType.includes('mov')) {
         
         const baseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
-        const token = localStorage.getItem('token');
+        const token = getAccessToken();
         
         if (!token) {
           throw new Error('Authentication token not found. Please log in again.');
@@ -33,7 +34,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          credentials: 'include',
         });
 
         if (!response.ok) {

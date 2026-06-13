@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const { executeQuery } = require('../config/database');
+const { getJwtSecret } = require('../config/security');
 
 // Verify JWT token
 const verifyToken = async (req, res, next) => {
@@ -14,12 +15,28 @@ const verifyToken = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
+
+    if (decoded.kind !== 'access' || !decoded.sid || !decoded.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token.'
+      });
+    }
     
-    // Check if user still exists and is active
+    // Check both the current user and the server-side session so logout and
+    // refresh-token reuse can revoke access immediately.
     const userResult = await executeQuery(
-      'SELECT id, email, role, status, organization_id FROM users WHERE id = ? AND status = "active"',
-      [decoded.userId]
+      `SELECT u.id, u.email, u.role, u.status, u.organization_id
+       FROM users u
+       INNER JOIN auth_sessions s ON s.user_id = u.id
+       WHERE u.id = ?
+         AND u.status = "active"
+         AND s.id = ?
+         AND s.revoked_at IS NULL
+         AND s.expires_at > NOW()
+       LIMIT 1`,
+      [decoded.userId, decoded.sid]
     );
 
     if (!userResult.success || userResult.data.length === 0) {
@@ -30,6 +47,7 @@ const verifyToken = async (req, res, next) => {
     }
 
     req.user = userResult.data[0];
+    req.auth = decoded;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

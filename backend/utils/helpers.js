@@ -9,8 +9,8 @@ const generateRandomString = (length = 32) => {
 const generateInvitationCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars like 0, O, I, 1
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 12; i++) {
+    code += chars.charAt(crypto.randomInt(chars.length));
   }
   return code;
 };
@@ -56,20 +56,21 @@ const isValidEmail = (email) => {
 // Validate password strength
 const validatePassword = (password) => {
   const errors = [];
+  const value = password || '';
   
-  if (password.length < 6) {
-    errors.push('Password must be at least 6 characters long');
+  if (value.length < 12) {
+    errors.push('Password must be at least 12 characters long');
   }
   
-  if (!/[a-z]/.test(password)) {
+  if (!/[a-z]/.test(value)) {
     errors.push('Password must contain at least one lowercase letter');
   }
   
-  if (!/[A-Z]/.test(password)) {
+  if (!/[A-Z]/.test(value)) {
     errors.push('Password must contain at least one uppercase letter');
   }
   
-  if (!/\d/.test(password)) {
+  if (!/\d/.test(value)) {
     errors.push('Password must contain at least one number');
   }
   

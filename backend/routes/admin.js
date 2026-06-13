@@ -2,6 +2,7 @@ const express = require('express');
 const { executeQuery } = require('../config/database');
 const { verifyToken, requirePlatformOwner, requireOrgAdmin } = require('../middleware/auth');
 const { validatePagination, validateSearch, validateDateRange } = require('../middleware/validation');
+const { generateInvitationCode } = require('../utils/helpers');
 
 const router = express.Router();
 
@@ -178,7 +179,16 @@ router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagi
 // Generate invitation code
 router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (req, res) => {
   try {
-    const { organizationId, role = 'member', expiresInDays = 7 } = req.body;
+    const { organizationId, role = 'member', expiresInDays = 7, maxUses = 1 } = req.body;
+    const normalizedExpiresInDays = Math.min(Math.max(parseInt(expiresInDays, 10) || 7, 1), 365);
+    const normalizedMaxUses = Math.min(Math.max(parseInt(maxUses, 10) || 1, 1), 100);
+
+    if (!['member', 'organization_admin'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role must be either member or organization_admin'
+      });
+    }
 
     // Validate organization
     const orgResult = await executeQuery(
@@ -193,17 +203,42 @@ router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (r
       });
     }
 
-    // Generate unique invitation code
-    const code = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+    let code;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = generateInvitationCode();
+      const codeResult = await executeQuery(
+        'SELECT id FROM invitation_codes WHERE code = ?',
+        [candidate]
+      );
+      if (codeResult.success && codeResult.data.length === 0) {
+        code = candidate;
+        break;
+      }
+    }
 
-    // Update organization with invitation code
-    const updateResult = await executeQuery(
-      'UPDATE organizations SET invitation_code = ?, invitation_role = ?, invitation_expires_at = ?, invitation_generated_by = ? WHERE id = ?',
-      [code, role, expiresAt, req.user.id, organizationId]
+    if (!code) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate a unique invitation code'
+      });
+    }
+
+    const expiresAt = new Date(Date.now() + normalizedExpiresInDays * 24 * 60 * 60 * 1000);
+
+    // Keep one active invitation per organization for the current admin UI.
+    await executeQuery(
+      'UPDATE invitation_codes SET revoked_at = NOW() WHERE organization_id = ? AND revoked_at IS NULL',
+      [organizationId]
     );
 
-    if (!updateResult.success) {
+    const invitationResult = await executeQuery(
+      `INSERT INTO invitation_codes
+        (code, organization_id, role, expires_at, max_uses, generated_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [code, organizationId, role, expiresAt, normalizedMaxUses, req.user.id]
+    );
+
+    if (!invitationResult.success) {
       return res.status(500).json({
         success: false,
         message: 'Failed to generate invitation code'
@@ -220,11 +255,14 @@ router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (r
       success: true,
       message: 'Invitation code generated successfully',
       data: {
+        invitationId: invitationResult.data.insertId,
         code,
         organizationId,
         organizationName: orgResult.data[0].name,
         role,
-        expiresAt
+        expiresAt,
+        maxUses: normalizedMaxUses,
+        useCount: 0
       }
     });
   } catch (error) {
@@ -236,40 +274,45 @@ router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (r
   }
 });
 
-// Get all invitations (from organizations table)
+// Get all active invitations.
 router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination, validateSearch, async (req, res) => {
   try {
     const { page = 1, limit = 10, q: search, organizationId } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = ['o.invitation_code IS NOT NULL'];
+    let whereConditions = ['i.revoked_at IS NULL'];
     let queryParams = [];
 
     // Search filter
     if (search) {
-      whereConditions.push('(o.invitation_code LIKE ? OR o.name LIKE ?)');
+      whereConditions.push('(i.code LIKE ? OR o.name LIKE ?)');
       const searchPattern = `%${search}%`;
       queryParams.push(searchPattern, searchPattern);
     }
 
     // Organization filter
     if (organizationId) {
-      whereConditions.push('o.id = ?');
+      whereConditions.push('i.organization_id = ?');
       queryParams.push(organizationId);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-    // Get invitations from organizations
     const invitationsQuery = `
-      SELECT o.id as organization_id, o.name as organization_name, 
-             o.invitation_code as code, o.invitation_role as role, 
-             o.invitation_expires_at as expires_at, o.invitation_generated_by as generated_by,
+      SELECT i.id, i.organization_id, o.name as organization_name,
+             i.code, i.role, i.expires_at, i.max_uses, i.use_count,
+             i.generated_by, i.created_at,
+             CASE
+               WHEN i.expires_at <= NOW() THEN 'expired'
+               WHEN i.use_count >= i.max_uses THEN 'used'
+               ELSE 'active'
+             END AS status,
              u.first_name, u.last_name
-      FROM organizations o
-      LEFT JOIN users u ON o.invitation_generated_by = u.id
+      FROM invitation_codes i
+      INNER JOIN organizations o ON o.id = i.organization_id
+      LEFT JOIN users u ON i.generated_by = u.id
       ${whereClause}
-      ORDER BY o.updated_at DESC
+      ORDER BY i.created_at DESC
       LIMIT ${parseInt(limit)} OFFSET ${offset}
     `;
 
@@ -278,7 +321,8 @@ router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total 
-      FROM organizations o
+      FROM invitation_codes i
+      INNER JOIN organizations o ON o.id = i.organization_id
       ${whereClause}
     `;
 
@@ -312,29 +356,29 @@ router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination
   }
 });
 
-// Delete invitation (clear from organization)
+// Revoke the active invitation for an organization.
 router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner, async (req, res) => {
   try {
     const { organizationId } = req.params;
 
-    // Check if organization exists and has invitation code
-    const orgResult = await executeQuery(
-      'SELECT * FROM organizations WHERE id = ? AND invitation_code IS NOT NULL',
+    const invitationResult = await executeQuery(
+      `SELECT i.id, i.code
+       FROM invitation_codes i
+       WHERE i.organization_id = ? AND i.revoked_at IS NULL
+       ORDER BY i.created_at DESC
+       LIMIT 1`,
       [organizationId]
     );
 
-    if (!orgResult.success || orgResult.data.length === 0) {
+    if (!invitationResult.success || invitationResult.data.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Organization or invitation not found'
+        message: 'Active invitation not found'
       });
     }
 
-    const org = orgResult.data[0];
-
-    // Clear invitation from organization
     const deleteResult = await executeQuery(
-      'UPDATE organizations SET invitation_code = NULL, invitation_role = NULL, invitation_expires_at = NULL, invitation_generated_by = NULL WHERE id = ?',
+      'UPDATE invitation_codes SET revoked_at = NOW() WHERE organization_id = ? AND revoked_at IS NULL',
       [organizationId]
     );
 
@@ -348,7 +392,7 @@ router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner,
     // Log deletion
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, parseInt(organizationId), 'DELETE', 'INVITATION', parseInt(organizationId), JSON.stringify({ code: org.invitation_code })]
+      [req.user.id, parseInt(organizationId), 'DELETE', 'INVITATION', invitationResult.data[0].id, JSON.stringify({ code: invitationResult.data[0].code })]
     );
 
     res.json({
