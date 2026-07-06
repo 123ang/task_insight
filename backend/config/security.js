@@ -57,7 +57,7 @@ const getAllowedCorsOrigins = () => {
 
 const isOriginAllowed = (origin, allowedOrigins = getAllowedCorsOrigins()) => {
   if (!origin) {
-    return !isProduction();
+    return true;
   }
 
   return allowedOrigins.includes(origin);

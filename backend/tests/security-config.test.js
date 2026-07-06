@@ -43,4 +43,13 @@ describe('security configuration', () => {
     expect(isOriginAllowed('https://taskinsight.my', origins)).toBe(true);
     expect(isOriginAllowed('http://localhost:3000', origins)).toBe(false);
   });
+
+  it('allows requests without an Origin header', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CORS_ORIGINS = 'https://taskinsight.my';
+
+    const { getAllowedCorsOrigins, isOriginAllowed } = require('../config/security');
+
+    expect(isOriginAllowed(undefined, getAllowedCorsOrigins())).toBe(true);
+  });
 });
