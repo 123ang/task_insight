@@ -5,6 +5,7 @@ import { adminService, OrganizationStats, OrganizationStorageAnalytics } from '.
 import { userService } from '../services/userService';
 import { User } from '../services/authService';
 import { auditService, AuditLog } from '../services/auditService';
+import { getAndaiAssistantUrl, openAndaiAssistant } from '../utils/platformLinks';
 import toast from 'react-hot-toast';
 import '../styles/admin.css';
 
@@ -13,6 +14,7 @@ const OrganizationAdminPanel: React.FC = () => {
   const location = useLocation();
   const params = useParams<{ tab?: string }>();
   const { user, logout, isOrganizationAdmin } = useAuth();
+  const andaiAssistantUrl = getAndaiAssistantUrl();
   
   // Get current view from URL or default to 'overview'
   const getCurrentView = () => {
@@ -303,6 +305,20 @@ const OrganizationAdminPanel: React.FC = () => {
                   <h4>{user?.firstName} {user?.lastName}</h4>
                   <p>{user?.email}</p>
                 </div>
+                <button onClick={() => {
+                  setShowUserMenu(false);
+                  navigate('/');
+                }}>
+                  <i className="fas fa-th-large"></i> Platform chooser
+                </button>
+                {andaiAssistantUrl && (
+                  <button onClick={() => {
+                    setShowUserMenu(false);
+                    openAndaiAssistant();
+                  }}>
+                    <i className="fas fa-brain"></i> ANDAI Assistant
+                  </button>
+                )}
                 <button onClick={() => navigate('/dashboard/my-drive')}>
                   <i className="fas fa-home"></i> Dashboard
                 </button>
@@ -818,4 +834,3 @@ const OrganizationAdminPanel: React.FC = () => {
 };
 
 export default OrganizationAdminPanel;
-

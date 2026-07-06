@@ -1,9 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getAndaiAssistantUrl, openAndaiAssistant } from '../utils/platformLinks';
 import '../styles/gateway.css';
 
-const ANDAI_URL = process.env.REACT_APP_ANDAI_URL || '';
+const ANDAI_URL = getAndaiAssistantUrl();
 
 const GatewayLanding: React.FC = () => {
   const navigate = useNavigate();
@@ -15,9 +16,7 @@ const GatewayLanding: React.FC = () => {
   };
 
   const handleAndai = () => {
-    if (ANDAI_URL) {
-      window.location.href = ANDAI_URL;
-    }
+    openAndaiAssistant();
   };
 
   const displayName = user

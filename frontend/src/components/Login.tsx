@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login, register, isAuthenticated, isLoading, isPlatformOwner, isOrganizationAdmin } = useAuth();
+  const { login, register, isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('login');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
@@ -50,14 +50,9 @@ const Login: React.FC = () => {
   useEffect(() => {
     // Only redirect if we're sure the user is authenticated and not loading
       if (!isLoading && isAuthenticated) {
-        // Check if user is admin (platform owner or organization admin)
-        if (isPlatformOwner() || isOrganizationAdmin()) {
-          navigate('/admin', { replace: true });
-        } else {
-          navigate('/', { replace: true });
-        }
+        navigate('/', { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate, isPlatformOwner, isOrganizationAdmin]);
+  }, [isAuthenticated, isLoading, navigate]);
 
   const showTab = (tab: string, event?: React.MouseEvent) => {
     if (event) event.preventDefault();
@@ -131,7 +126,7 @@ const Login: React.FC = () => {
       const success = await login(email, password, true);
       
       if (success) {
-        navigate('/admin');
+        navigate('/');
       }
     } catch (error) {
       console.error('Admin login error:', error);

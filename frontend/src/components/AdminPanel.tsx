@@ -6,6 +6,7 @@ import { organizationService, Organization } from '../services/organizationServi
 import { userService } from '../services/userService';
 import { User } from '../services/authService';
 import { auditService, AuditLog } from '../services/auditService';
+import { getAndaiAssistantUrl, openAndaiAssistant } from '../utils/platformLinks';
 import toast from 'react-hot-toast';
 import '../styles/admin.css';
 
@@ -14,6 +15,7 @@ const AdminPanel: React.FC = () => {
   const location = useLocation();
   const params = useParams<{ tab?: string }>();
   const { user, logout, isPlatformOwner } = useAuth();
+  const andaiAssistantUrl = getAndaiAssistantUrl();
   
   // Get current view from URL or default to 'overview'
   const getCurrentView = () => {
@@ -461,6 +463,26 @@ const AdminPanel: React.FC = () => {
                   <h4>{user?.firstName} {user?.lastName}</h4>
                   <p>{user?.email}</p>
                 </div>
+                <button onClick={() => {
+                  setShowUserMenu(false);
+                  navigate('/');
+                }}>
+                  <i className="fas fa-th-large"></i> Platform chooser
+                </button>
+                <button onClick={() => {
+                  setShowUserMenu(false);
+                  navigate('/dashboard/my-drive');
+                }}>
+                  <i className="fas fa-home"></i> Dashboard
+                </button>
+                {andaiAssistantUrl && (
+                  <button onClick={() => {
+                    setShowUserMenu(false);
+                    openAndaiAssistant();
+                  }}>
+                    <i className="fas fa-brain"></i> ANDAI Assistant
+                  </button>
+                )}
                 <button onClick={handleLogout}>
                   <i className="fas fa-sign-out-alt"></i> Logout
                 </button>

@@ -8,6 +8,7 @@ import { getAccessToken } from '../services/api';
 import FileSharingModal from './FileSharingModal';
 import FilePreviewModal from './FilePreviewModal';
 import ReminderModal from './ReminderModal';
+import { getAndaiAssistantUrl, openAndaiAssistant } from '../utils/platformLinks';
 import toast from 'react-hot-toast';
 
 // Image Thumbnail Component
@@ -81,6 +82,7 @@ const Dashboard: React.FC = () => {
   const location = useLocation();
   const params = useParams<{ folderId?: string }>();
   const { user, logout, isAuthenticated, isOrganizationAdmin, isPlatformOwner } = useAuth();
+  const andaiAssistantUrl = getAndaiAssistantUrl();
   const { 
     files = [], 
     folders = [], 
@@ -2298,6 +2300,20 @@ const Dashboard: React.FC = () => {
                   <h4>{user.firstName} {user.lastName}</h4>
                   <p>{user.email}</p>
                 </div>
+                <button onClick={() => {
+                  setShowUserMenu(false);
+                  navigate('/');
+                }}>
+                  <i className="fas fa-th-large"></i> Platform chooser
+                </button>
+                {andaiAssistantUrl && (
+                  <button onClick={() => {
+                    setShowUserMenu(false);
+                    openAndaiAssistant();
+                  }}>
+                    <i className="fas fa-brain"></i> ANDAI Assistant
+                  </button>
+                )}
                 {isOrganizationAdmin() && (
                   <button onClick={() => {
                     setShowUserMenu(false);
