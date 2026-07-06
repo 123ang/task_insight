@@ -27,6 +27,8 @@ const reminderRoutes = require('./routes/reminders');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+app.set('trust proxy', 1);
+
 // Security middleware - Configure helmet to allow iframe embedding for previews
 app.use(helmet({
   contentSecurityPolicy: {
@@ -66,7 +68,7 @@ const globalLimiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, 10) || 10,
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, 10) || 50,
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again later.'

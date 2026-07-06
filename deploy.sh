@@ -59,6 +59,11 @@ deploy_backend() {
   echo ">>> Backend: install dependencies..."
   cd "$BACKEND_DIR"
   npm install --production
+  if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.migrate ? 0 : 1)" >/dev/null 2>&1; then
+    echo ""
+    echo ">>> Backend: running migrations..."
+    npm run migrate
+  fi
   echo ""
   echo ">>> Backend: restarting PM2 app '$PM2_APP_NAME'..."
   if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
@@ -83,14 +88,21 @@ deploy_frontend() {
   echo ""
   echo ">>> Frontend: building production bundle..."
   npm run build
-  if [ ! -d "build" ]; then
-    echo "    ERROR: build/ not found after npm run build"
+
+  if [ -d "dist" ]; then
+    FRONTEND_BUILD_DIR="dist"
+  elif [ -d "build" ]; then
+    FRONTEND_BUILD_DIR="build"
+  else
+    echo "    ERROR: neither dist/ nor build/ found after npm run build"
     exit 1
   fi
+
   echo ""
-  echo ">>> Frontend: deploying to $WEB_ROOT..."
+  echo ">>> Frontend: deploying $FRONTEND_BUILD_DIR/ to $WEB_ROOT..."
   sudo mkdir -p "$WEB_ROOT"
-  sudo cp -r build/* "$WEB_ROOT"
+  sudo rm -rf "$WEB_ROOT"/*
+  sudo cp -r "$FRONTEND_BUILD_DIR"/. "$WEB_ROOT"/
   sudo chown -R www-data:www-data "$WEB_ROOT"
   sudo chmod -R 755 "$WEB_ROOT"
   echo "    Done."
