@@ -54,7 +54,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-const skipRateLimitInTests = () => process.env.NODE_ENV === 'test';
+const areRateLimitsDisabled = () => process.env.DISABLE_RATE_LIMITS === 'true';
+const skipRateLimit = () => process.env.NODE_ENV === 'test' || areRateLimitsDisabled();
 const globalLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 300,
@@ -64,7 +65,7 @@ const globalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipRateLimitInTests,
+  skip: skipRateLimit,
 });
 const authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
@@ -75,7 +76,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipRateLimitInTests,
+  skip: skipRateLimit,
 });
 
 app.use(globalLimiter);
