@@ -96,7 +96,7 @@ describe('GatewayLanding', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard/my-drive');
   });
 
-  it('ANDAI card is disabled when the ANDAI URL is not set', () => {
+  it('ANDAI card is enabled by default', () => {
     render(
       <Wrapper>
         <GatewayLanding />
@@ -104,8 +104,8 @@ describe('GatewayLanding', () => {
     );
 
     const andaiBtn = screen.getByRole('button', { name: /open andai/i });
-    expect(andaiBtn).toBeDisabled();
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+    expect(andaiBtn).toBeEnabled();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
   });
 
   it('sign out button calls logout and redirects to /login', async () => {

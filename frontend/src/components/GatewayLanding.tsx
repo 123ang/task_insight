@@ -1,10 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAndaiAssistantUrl, openAndaiAssistant } from '../utils/platformLinks';
+import { openAndaiAssistant } from '../utils/platformLinks';
 import '../styles/gateway.css';
-
-const ANDAI_URL = getAndaiAssistantUrl();
 
 const GatewayLanding: React.FC = () => {
   const navigate = useNavigate();
@@ -77,11 +75,9 @@ const GatewayLanding: React.FC = () => {
 
           {/* ANDAI card */}
           <button
-            className={`gateway-card${!ANDAI_URL ? ' gateway-card--disabled' : ''}`}
+            className="gateway-card"
             onClick={handleAndai}
-            disabled={!ANDAI_URL}
             aria-label="Open ANDAI — ask the knowledge base"
-            aria-disabled={!ANDAI_URL}
           >
             <div className="gateway-card-icon gateway-card-icon--andai">
               <i className="fas fa-brain" aria-hidden="true"></i>
@@ -92,9 +88,6 @@ const GatewayLanding: React.FC = () => {
               <p className="gateway-card-hint">
                 Search, ask questions, and explore your knowledge base
               </p>
-              {!ANDAI_URL && (
-                <span className="gateway-card-badge">Coming soon</span>
-              )}
             </div>
             <span className="gateway-card-arrow" aria-hidden="true">
               <i className="fas fa-arrow-right"></i>

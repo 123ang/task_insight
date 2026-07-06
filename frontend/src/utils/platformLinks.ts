@@ -1,4 +1,4 @@
-const rawAndaiUrl = process.env.REACT_APP_ANDAI_URL || '';
+const rawAndaiUrl = process.env.REACT_APP_ANDAI_URL || 'https://andai.my/';
 
 export const getAndaiAssistantUrl = (): string => {
   const baseUrl = rawAndaiUrl.trim().replace(/\/+$/, '');
