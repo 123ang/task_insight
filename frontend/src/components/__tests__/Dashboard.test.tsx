@@ -62,6 +62,7 @@ jest.mock('../../services/fileService', () => ({
     getDeletedFiles: jest.fn(),
     uploadFile: jest.fn(),
     downloadFile: jest.fn(),
+    ocrFile: jest.fn(),
     updateFile: jest.fn(),
     deleteFile: jest.fn(),
     createFolder: jest.fn(),
@@ -74,6 +75,7 @@ jest.mock('../../services/fileService', () => ({
       return '0 Bytes';
     }),
     isImage: jest.fn(() => false),
+    isPdf: jest.fn(() => true),
   },
 }));
 
@@ -117,6 +119,7 @@ jest.mock('react-hot-toast', () => {
   const toastMock = {
     success: jest.fn(),
     error: jest.fn(),
+    loading: jest.fn(() => 'toast-id'),
     promise: jest.fn((promise) => promise),
   };
 
@@ -194,6 +197,11 @@ describe('Dashboard Component', () => {
       return '0 Bytes';
     });
     (fileService.isImage as jest.Mock).mockReturnValue(false);
+    (fileService.isPdf as jest.Mock).mockReturnValue(true);
+    (fileService.ocrFile as jest.Mock).mockResolvedValue({
+      success: true,
+      data: { fileId: 2, name: 'test-document.txt', size: 256, type: '.txt', folderId: null },
+    });
     (fileService.createFolder as jest.Mock).mockResolvedValue({
       success: true,
       data: { folderId: 2, name: 'New Folder' },
@@ -272,6 +280,21 @@ describe('Dashboard Component', () => {
     await user.type(searchInput, 'test');
 
     expect(searchInput).toHaveValue('test');
+  });
+
+  it('shows OCR for editable PDFs and creates a text sidecar file', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    const fileName = await screen.findByText('test-document.pdf');
+    const fileCard = fileName.closest('.file-item') as HTMLElement;
+
+    await user.click(within(fileCard).getByTitle('More options'));
+    await user.click(await screen.findByText('OCR to text'));
+
+    await waitFor(() => {
+      expect(fileService.ocrFile).toHaveBeenCalledWith(1);
+    });
   });
 
   it('handles user logout', async () => {

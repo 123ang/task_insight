@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
 import OrganizationAdminPanel from './components/OrganizationAdminPanel';
 import ProtectedRoute from './components/ProtectedRoute';
+import GatewayLanding from './components/GatewayLanding';
 import './styles/main.css';
 import './styles/auth.css';
 import './styles/dashboard.css';
@@ -15,6 +16,7 @@ import './styles/admin.css';
 import './styles/modals.css';
 import './styles/avatars.css';
 import './styles/reminders.css';
+import './styles/gateway.css';
 
 function App() {
   return (
@@ -41,7 +43,14 @@ function App() {
             />
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <GatewayLanding />
+                  </ProtectedRoute>
+                }
+              />
               <Route 
                 path="/dashboard" 
                 element={<Navigate to="/dashboard/my-drive" replace />}

@@ -571,6 +571,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleOcrFile = async (file: FileItem) => {
+    const toastId = toast.loading('Running OCR...', { id: `ocr-${file.id}` });
+
+    try {
+      const response = await fileService.ocrFile(file.id);
+
+      if (response.success) {
+        toast.success(`Created ${response.data?.name || 'OCR text file'}`, { id: toastId });
+        await refreshFiles();
+        await refreshStats();
+      } else {
+        toast.error(response.message || 'Failed to OCR file', { id: toastId });
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || 'Failed to OCR file', { id: toastId });
+    }
+  };
+
   // Handle file deletion
   const handleDeleteFile = async (file: FileItem) => {
     if (window.confirm(`Are you sure you want to move "${file.name}" to trash?`)) {
@@ -3321,6 +3339,18 @@ const Dashboard: React.FC = () => {
             <i className="fas fa-link"></i>
             <span>Copy link</span>
           </button>
+          {contextMenu.type === 'file' && contextMenu.item && contextCanEdit && fileService.isPdf(contextMenu.item as FileItem) && (
+            <button
+              className="context-menu-item"
+              onClick={() => {
+                handleOcrFile(contextMenu.item as FileItem);
+                closeContextMenu();
+              }}
+            >
+              <i className="fas fa-file-alt"></i>
+              <span>OCR to text</span>
+            </button>
+          )}
           {contextCanEdit && (
             <>
               <div className="context-menu-divider" style={{ height: '1px', background: '#e0e0e0', margin: '8px 0' }}></div>

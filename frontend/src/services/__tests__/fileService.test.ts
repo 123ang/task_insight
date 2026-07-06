@@ -158,6 +158,22 @@ describe('fileService', () => {
     });
   });
 
+  describe('ocrFile', () => {
+    it('requests OCR text creation for a PDF', async () => {
+      const mockResponse = {
+        success: true,
+        data: { fileId: 2, name: 'test.txt', size: 12, type: '.txt', folderId: null },
+      };
+
+      (apiService.post as jest.Mock).mockResolvedValue(mockResponse);
+
+      const result = await fileService.ocrFile(1);
+
+      expect(apiService.post).toHaveBeenCalledWith('/files/1/ocr', {});
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
   describe('renameFile', () => {
     it('renames a file', async () => {
       const mockResponse = {

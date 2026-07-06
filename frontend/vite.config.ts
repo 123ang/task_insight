@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
       'process.env.REACT_APP_DEBUG_API': JSON.stringify(
         value('VITE_DEBUG_API', 'REACT_APP_DEBUG_API', 'false')
       ),
+      'process.env.REACT_APP_ANDAI_URL': JSON.stringify(
+        value('VITE_ANDAI_URL', 'REACT_APP_ANDAI_URL')
+      ),
     },
     server: {
       port: 3000,

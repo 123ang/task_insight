@@ -26,8 +26,9 @@ your audit."*
 
 ## Open decisions (decide before Phase 1 coding)
 
-1. **Repo ownership:** code lives in `Kevin6098/DMS`. Move to a shared org
-   (e.g. `taskinsight-my`) before signing corporate clients.
+1. **Repo ownership:** code lives in `123ang/task_insight`. Consider moving
+   to a dedicated org (e.g. `taskinsight-my`) before signing corporate
+   clients.
 2. **Approver model:** start with per-document approvers (flexible, simple)
    vs. org-level "approver" role. Plan assumes **per-document approver
    chosen at submission time**, restricted to org members; revisit multi-step

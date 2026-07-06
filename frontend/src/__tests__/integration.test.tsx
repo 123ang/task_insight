@@ -54,9 +54,11 @@ jest.mock('../services/fileService', () => ({
       success: true,
       data: { files: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } },
     })),
+    ocrFile: jest.fn(() => Promise.resolve({ success: true, data: { fileId: 1, name: 'ocr.txt', size: 0, type: '.txt' } })),
     getFileIcon: jest.fn(() => 'fas fa-file-alt'),
     formatFileSize: jest.fn(() => '0 Bytes'),
     isImage: jest.fn(() => false),
+    isPdf: jest.fn(() => true),
   },
 }));
 
@@ -87,6 +89,7 @@ jest.mock('react-hot-toast', () => {
   const toastMock = {
     success: jest.fn(),
     error: jest.fn(),
+    loading: jest.fn(() => 'toast-id'),
   };
 
   return {
@@ -157,6 +160,11 @@ describe('Integration Tests', () => {
     (fileService.getFileIcon as jest.Mock).mockReturnValue('fas fa-file-alt');
     (fileService.formatFileSize as jest.Mock).mockReturnValue('0 Bytes');
     (fileService.isImage as jest.Mock).mockReturnValue(false);
+    (fileService.isPdf as jest.Mock).mockReturnValue(true);
+    (fileService.ocrFile as jest.Mock).mockResolvedValue({
+      success: true,
+      data: { fileId: 1, name: 'ocr.txt', size: 0, type: '.txt' },
+    });
 
     (reminderService.getPendingReminders as jest.Mock).mockResolvedValue({ success: true, data: [] });
     (reminderService.getTodoDocuments as jest.Mock).mockResolvedValue({
@@ -191,7 +199,7 @@ describe('Integration Tests', () => {
 
       await waitFor(() => {
         expect(authService.setAuthData).toHaveBeenCalledWith('mock-token', testUser);
-        expect(mockNavigate).toHaveBeenCalledWith('/dashboard/my-drive');
+        expect(mockNavigate).toHaveBeenCalledWith('/');
       });
     });
 

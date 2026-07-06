@@ -101,6 +101,14 @@ export interface FileStats {
   recentUploads: number;
 }
 
+export interface OcrFileResponse {
+  fileId: number;
+  name: string;
+  size: number;
+  type: string;
+  folderId?: number | null;
+}
+
 // File Service
 export const fileService = {
   // Get all files with pagination and filters
@@ -161,6 +169,11 @@ export const fileService = {
   // Update file
   updateFile: async (fileId: number, fileData: FileUpdateRequest): Promise<ApiResponse<void>> => {
     return apiService.put<void>(`/files/${fileId}`, fileData);
+  },
+
+  // Extract PDF text/OCR into a companion .txt file
+  ocrFile: async (fileId: number): Promise<ApiResponse<OcrFileResponse>> => {
+    return apiService.post<OcrFileResponse>(`/files/${fileId}/ocr`, {});
   },
 
   // Delete file (soft delete - move to trash)
@@ -358,6 +371,12 @@ export const fileService = {
     return type.includes('jpg') || type.includes('jpeg') || 
            type.includes('png') || type.includes('gif') ||
            type.includes('webp') || type.includes('bmp') || type.includes('svg');
+  },
+
+  isPdf: (file: Pick<FileItem, 'file_type' | 'name'>): boolean => {
+    const type = (file.file_type || '').toLowerCase();
+    const name = (file.name || '').toLowerCase();
+    return type.includes('pdf') || name.endsWith('.pdf');
   },
 
   // Get thumbnail URL for image files

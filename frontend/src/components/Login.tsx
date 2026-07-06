@@ -54,7 +54,7 @@ const Login: React.FC = () => {
         if (isPlatformOwner() || isOrganizationAdmin()) {
           navigate('/admin', { replace: true });
         } else {
-          navigate('/dashboard/my-drive', { replace: true });
+          navigate('/', { replace: true });
         }
     }
   }, [isAuthenticated, isLoading, navigate, isPlatformOwner, isOrganizationAdmin]);
@@ -99,7 +99,7 @@ const Login: React.FC = () => {
       const success = await login(email, password);
       
       if (success) {
-        navigate('/dashboard/my-drive');
+        navigate('/');
       }
     } catch (error) {
       console.error('Login error:', error);

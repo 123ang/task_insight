@@ -21,6 +21,11 @@ const {
   runMalwareScan,
   validateUploadedFile
 } = require('../utils/fileSecurity');
+const {
+  createOcrTextFile,
+  extractPdfText,
+  isPdfFile
+} = require('../utils/ocrService');
 const { canManageFolder } = require('../utils/authorization');
 
 // Normalize date to MySQL datetime (YYYY-MM-DD HH:mm:ss). Handles ISO strings from frontend.
@@ -755,6 +760,83 @@ router.get('/:fileId/versions', verifyToken, requireFileAccess, async (req, res)
   } catch (error) {
     console.error('Get versions error:', error);
     res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Extract PDF text/OCR into a .txt sidecar file in the same folder.
+router.post('/:fileId/ocr', verifyToken, requireFileWriteAccess, async(req, res) => {
+  try {
+    const sourceFile = req.file;
+
+    if (!sourceFile || !sourceFile.path) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on disk'
+      });
+    }
+
+    if (!isPdfFile(sourceFile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'OCR is only available for PDF files.'
+      });
+    }
+
+    try {
+      await fs.access(sourceFile.path);
+    } catch (error) {
+      logger.warn('OCR source file missing on disk', {
+        fileId: sourceFile.id,
+        error: logger.serializeError(error)
+      });
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on disk'
+      });
+    }
+
+    const extraction = await extractPdfText(sourceFile.path);
+    if (!extraction.success) {
+      return res.status(extraction.message.includes('not available') ? 503 : 422).json({
+        success: false,
+        message: extraction.message
+      });
+    }
+
+    const created = await createOcrTextFile({
+      sourceFile,
+      user: req.user,
+      text: extraction.text,
+      executeQuery
+    });
+
+    if (!created.success) {
+      const status = created.message.includes('quota') || created.message.includes('Organization')
+        ? 400
+        : 500;
+      return res.status(status).json({
+        success: false,
+        message: created.message
+      });
+    }
+
+    const safeData = { ...created.data };
+    delete safeData.storagePath;
+
+    return res.status(201).json({
+      success: true,
+      message: 'OCR text file created successfully',
+      data: safeData
+    });
+  } catch (error) {
+    logger.error('OCR file error', {
+      fileId: req.params.fileId,
+      error: logger.serializeError(error)
+    });
+    return res.status(500).json({
       success: false,
       message: 'Internal server error'
     });
