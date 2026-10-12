@@ -161,7 +161,7 @@ describeDb('Authentication API', () => {
       const jwt = require('jsonwebtoken');
       const hashedPassword = await bcrypt.hash('TestPassword123', 12);
 
-      await executeQuery(
+      const userResult = await executeQuery(
         'INSERT INTO users (email, password_hash, first_name, last_name, organization_id, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['test_user@example.com', hashedPassword, 'Test', 'User', testOrgId, 'member', 'active']
       );
