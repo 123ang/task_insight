@@ -12,7 +12,7 @@ const splitStatements = (sql) => {
     .filter((statement) => statement && !statement.startsWith('--'));
 };
 
-const ensureMigrationsTable = async (connection) => {
+const ensureMigrationsTable = async(connection) => {
   await connection.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -22,12 +22,12 @@ const ensureMigrationsTable = async (connection) => {
   `);
 };
 
-const getAppliedMigrations = async (connection) => {
+const getAppliedMigrations = async(connection) => {
   const [rows] = await connection.query('SELECT filename FROM schema_migrations');
   return new Set(rows.map((row) => row.filename));
 };
 
-const runMigration = async (connection, filename) => {
+const runMigration = async(connection, filename) => {
   const sql = await fs.readFile(path.join(migrationsDir, filename), 'utf8');
   const statements = splitStatements(sql);
 
@@ -47,7 +47,7 @@ const runMigration = async (connection, filename) => {
   }
 };
 
-const run = async () => {
+const run = async() => {
   const connection = await pool.getConnection();
 
   try {
@@ -81,5 +81,5 @@ if (require.main === module) {
 
 module.exports = {
   run,
-  splitStatements,
+  splitStatements
 };

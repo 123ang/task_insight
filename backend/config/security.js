@@ -3,7 +3,7 @@ const PLACEHOLDER_SECRET_PATTERNS = [
   /your[-_ ]?secret/i,
   /secret[-_ ]?key/i,
   /test[-_ ]?secret/i,
-  /^jwt$/i,
+  /^jwt$/i
 ];
 
 const DEFAULT_DEV_ORIGINS = ['http://localhost:3000'];
@@ -40,7 +40,7 @@ const getJwtSecret = () => {
 const getAllowedCorsOrigins = () => {
   const configured = [
     ...parseList(process.env.CORS_ORIGINS),
-    ...parseList(process.env.CORS_ORIGIN),
+    ...parseList(process.env.CORS_ORIGIN)
   ];
   const origins = [...new Set(configured)];
 
@@ -65,11 +65,13 @@ const isOriginAllowed = (origin, allowedOrigins = getAllowedCorsOrigins()) => {
 
 const getFrameAncestors = () => {
   const origins = getAllowedCorsOrigins();
-  return ["'self'", ...origins];
+  return ['\'self\'', ...origins];
 };
 
 const validateDatabaseEnvironment = () => {
-  if (isTest()) return;
+  if (isTest()) {
+    return;
+  }
 
   const missing = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
     .filter((key) => !process.env[key]);
@@ -95,5 +97,5 @@ module.exports = {
   getJwtSecret,
   isOriginAllowed,
   validateDatabaseEnvironment,
-  validateRequiredSecurityConfig,
+  validateRequiredSecurityConfig
 };

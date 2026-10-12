@@ -2,7 +2,7 @@ const LEVELS = {
   error: 0,
   warn: 1,
   info: 2,
-  debug: 3,
+  debug: 3
 };
 
 const configuredLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
@@ -17,11 +17,13 @@ const sensitiveKeys = new Set([
   'token',
   'access_token',
   'refreshtoken',
-  'refresh_token',
+  'refresh_token'
 ]);
 
 const redactSensitive = (value, depth = 0) => {
-  if (value == null || depth > 4) return value;
+  if (value == null || depth > 4) {
+    return value;
+  }
 
   if (Array.isArray(value)) {
     return value.map((item) => redactSensitive(item, depth + 1));
@@ -40,26 +42,32 @@ const redactSensitive = (value, depth = 0) => {
 };
 
 const serializeError = (error) => {
-  if (!error) return undefined;
-  if (!(error instanceof Error)) return redactSensitive(error);
+  if (!error) {
+    return undefined;
+  }
+  if (!(error instanceof Error)) {
+    return redactSensitive(error);
+  }
 
   return {
     name: error.name,
     message: error.message,
     code: error.code,
     status: error.status,
-    stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+    stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
   };
 };
 
 const write = (level, message, meta) => {
-  if (LEVELS[level] > activeLevel) return;
+  if (LEVELS[level] > activeLevel) {
+    return;
+  }
 
   const entry = {
     timestamp: new Date().toISOString(),
     level,
     message,
-    ...(meta ? { meta: redactSensitive(meta) } : {}),
+    ...(meta ? { meta: redactSensitive(meta) } : {})
   };
 
   const output = JSON.stringify(entry);
@@ -77,10 +85,10 @@ const logger = {
   warn: (message, meta) => write('warn', message, meta),
   info: (message, meta) => write('info', message, meta),
   debug: (message, meta) => write('debug', message, meta),
-  serializeError,
+  serializeError
 };
 
 module.exports = {
   logger,
-  redactSensitive,
+  redactSensitive
 };

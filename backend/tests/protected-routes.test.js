@@ -8,16 +8,16 @@ describe('critical API route authentication', () => {
     ['/api/files', 'files'],
     ['/api/files/folders/list', 'folders'],
     ['/api/audit', 'audit'],
-    ['/api/reminders', 'reminders'],
+    ['/api/reminders', 'reminders']
   ];
 
   it.each(protectedReads)(
     'rejects unauthenticated access to %s (%s)',
-    async (path) => {
+    async(path) => {
       const response = await request(app).get(path).expect(401);
 
       expect(response.body).toEqual(expect.objectContaining({
-        success: false,
+        success: false
       }));
     }
   );

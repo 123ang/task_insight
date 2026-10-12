@@ -4,10 +4,10 @@ const { executeQuery } = require('../config/database');
 const { getJwtSecret } = require('../config/security');
 
 // Verify JWT token
-const verifyToken = async (req, res, next) => {
+const verifyToken = async(req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -23,7 +23,7 @@ const verifyToken = async (req, res, next) => {
         message: 'Invalid token.'
       });
     }
-    
+
     // Check both the current user and the server-side session so logout and
     // refresh-token reuse can revoke access immediately.
     const userResult = await executeQuery(
@@ -56,7 +56,7 @@ const verifyToken = async (req, res, next) => {
         message: 'Token expired. Please login again.'
       });
     }
-    
+
     return res.status(401).json({
       success: false,
       message: 'Invalid token.'
@@ -98,10 +98,10 @@ const requireOrgAdmin = (req, res, next) => {
 };
 
 // Check if user belongs to organization
-const requireOrgAccess = async (req, res, next) => {
+const requireOrgAccess = async(req, res, next) => {
   try {
     const orgId = req.params.orgId || req.body.organizationId || req.query.organizationId;
-    
+
     if (!orgId) {
       return res.status(400).json({
         success: false,
@@ -137,7 +137,9 @@ const requireOrgAccess = async (req, res, next) => {
 };
 
 const resolveFilePath = (storagePath) => {
-  if (!storagePath) return null;
+  if (!storagePath) {
+    return null;
+  }
   if (path.isAbsolute(storagePath)) {
     return storagePath;
   }
@@ -152,7 +154,9 @@ const setRequestFile = (req, file) => {
 };
 
 const roleCanManageOrgFile = (user, file) => {
-  if (user.role === 'platform_owner') return true;
+  if (user.role === 'platform_owner') {
+    return true;
+  }
   return user.role === 'organization_admin' && file.organization_id === user.organization_id;
 };
 
@@ -160,7 +164,7 @@ const userOwnsFile = (user, file) => {
   return file.uploaded_by === user.id && file.organization_id === user.organization_id;
 };
 
-const findActiveShare = async (fileId, userId, allowedPermissions) => {
+const findActiveShare = async(fileId, userId, allowedPermissions) => {
   const placeholders = allowedPermissions.map(() => '?').join(', ');
   const shareResult = await executeQuery(
     `SELECT permission_level
@@ -181,10 +185,10 @@ const createFileAccessMiddleware = ({
   allowedStatuses = ['active'],
   ownerOrAdminOnly = false,
   allowedSharePermissions = ['view', 'comment', 'edit']
-} = {}) => async (req, res, next) => {
+} = {}) => async(req, res, next) => {
   try {
     const fileId = req.params.fileId || req.params.id;
-    
+
     if (!fileId) {
       return res.status(400).json({
         success: false,

@@ -9,7 +9,7 @@ const { validatePassword } = require('../utils/helpers');
 const router = express.Router();
 
 // Create user (platform owner or org admin)
-router.post('/', verifyToken, requireOrgAdmin, async (req, res) => {
+router.post('/', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const { email, password, firstName, lastName, organizationId, role = 'member' } = req.body;
 
@@ -137,13 +137,13 @@ router.post('/', verifyToken, requireOrgAdmin, async (req, res) => {
 });
 
 // Get all users (platform owner or org admin)
-router.get('/', verifyToken, validatePagination, validateSearch, async (req, res) => {
+router.get('/', verifyToken, validatePagination, validateSearch, async(req, res) => {
   try {
     const { page = 1, limit = 10, q: search, organizationId, role, status } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Platform owner can see all users, org admin only sees their org users
     if (req.user.role === 'organization_admin') {
@@ -192,7 +192,7 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
       LEFT JOIN organizations o ON u.organization_id = o.id 
       ${whereClause}
       ORDER BY u.created_at DESC 
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const usersResult = await executeQuery(usersQuery, queryParams);
@@ -233,8 +233,8 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
       data: {
         data: mappedUsers,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -250,7 +250,7 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
 });
 
 // Get user by ID
-router.get('/:id', verifyToken, requireOrgAccess, async (req, res) => {
+router.get('/:id', verifyToken, requireOrgAccess, async(req, res) => {
   try {
     const { id } = req.params;
 
@@ -280,7 +280,7 @@ router.get('/:id', verifyToken, requireOrgAccess, async (req, res) => {
 });
 
 // Update user
-router.put('/:id', verifyToken, requireOrgAdmin, validateUserUpdate, async (req, res) => {
+router.put('/:id', verifyToken, requireOrgAdmin, validateUserUpdate, async(req, res) => {
   try {
     const { id } = req.params;
     const { firstName, lastName, email, role, status, organizationId } = req.body;
@@ -316,7 +316,7 @@ router.put('/:id', verifyToken, requireOrgAdmin, validateUserUpdate, async (req,
         });
       }
     }
-    
+
     // Platform owners can change organization_id, but validate it exists
     if (organizationId && req.user.role === 'platform_owner') {
       const orgCheck = await executeQuery(
@@ -421,7 +421,7 @@ router.put('/:id', verifyToken, requireOrgAdmin, validateUserUpdate, async (req,
 });
 
 // Change user password
-router.put('/:id/password', verifyToken, async (req, res) => {
+router.put('/:id/password', verifyToken, async(req, res) => {
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
@@ -513,7 +513,7 @@ router.put('/:id/password', verifyToken, async (req, res) => {
 });
 
 // Delete user (soft delete)
-router.delete('/:id', verifyToken, requireOrgAdmin, async (req, res) => {
+router.delete('/:id', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const { id } = req.params;
 
@@ -541,7 +541,7 @@ router.delete('/:id', verifyToken, requireOrgAdmin, async (req, res) => {
     }
 
     // Cannot delete yourself
-    if (req.user.id === parseInt(id)) {
+    if (req.user.id === parseInt(id, 10)) {
       return res.status(400).json({
         success: false,
         message: 'You cannot delete your own account'
@@ -581,12 +581,12 @@ router.delete('/:id', verifyToken, requireOrgAdmin, async (req, res) => {
 });
 
 // Get user statistics
-router.get('/stats/overview', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/stats/overview', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const { organizationId } = req.query;
-    
+
     let whereClause = '';
-    let queryParams = [];
+    const queryParams = [];
 
     if (req.user.role === 'organization_admin') {
       whereClause = 'WHERE organization_id = ?';

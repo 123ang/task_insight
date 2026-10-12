@@ -11,7 +11,7 @@ describeDb('Files API', () => {
   let testUserId;
 
   // Set up test data before all tests
-  beforeAll(async () => {
+  beforeAll(async() => {
     // Create test organization
     const orgResult = await executeQuery(
       'INSERT INTO organizations (name, description, storage_quota, status) VALUES (?, ?, ?, ?)',
@@ -23,7 +23,7 @@ describeDb('Files API', () => {
     const bcrypt = require('bcrypt');
     const jwt = require('jsonwebtoken');
     const hashedPassword = await bcrypt.hash('TestPassword123', 12);
-    
+
     const userResult = await executeQuery(
       'INSERT INTO users (email, password_hash, first_name, last_name, organization_id, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ['test_files@example.com', hashedPassword, 'Test', 'Files', testOrgId, 'member', 'active']
@@ -31,11 +31,11 @@ describeDb('Files API', () => {
     testUserId = userResult.data.insertId;
 
     testToken = jwt.sign(
-      { 
-        userId: testUserId, 
-        email: 'test_files@example.com', 
+      {
+        userId: testUserId,
+        email: 'test_files@example.com',
         role: 'member',
-        organizationId: testOrgId 
+        organizationId: testOrgId
       },
       process.env.JWT_SECRET || 'test-secret',
       { expiresIn: '1h' }
@@ -43,7 +43,7 @@ describeDb('Files API', () => {
   });
 
   // Clean up after all tests
-  afterAll(async () => {
+  afterAll(async() => {
     await executeQuery('DELETE FROM files WHERE organization_id = ?', [testOrgId]);
     await executeQuery('DELETE FROM folders WHERE organization_id = ?', [testOrgId]);
     await executeQuery('DELETE FROM users WHERE id = ?', [testUserId]);
@@ -51,7 +51,7 @@ describeDb('Files API', () => {
   });
 
   describe('POST /api/files/upload', () => {
-    it('should upload a file successfully', async () => {
+    it('should upload a file successfully', async() => {
       const testFilePath = path.join(__dirname, 'test-file.txt');
       fs.writeFileSync(testFilePath, 'Test file content');
 
@@ -75,7 +75,7 @@ describeDb('Files API', () => {
       }
     });
 
-    it('should fail to upload without authentication', async () => {
+    it('should fail to upload without authentication', async() => {
       const testFilePath = path.join(__dirname, 'test-file.txt');
       fs.writeFileSync(testFilePath, 'Test file content');
 
@@ -90,7 +90,7 @@ describeDb('Files API', () => {
       fs.unlinkSync(testFilePath);
     });
 
-    it('should fail to upload without file', async () => {
+    it('should fail to upload without file', async() => {
       const response = await request(app)
         .post('/api/files/upload')
         .set('Authorization', `Bearer ${testToken}`)
@@ -103,7 +103,7 @@ describeDb('Files API', () => {
   describe('GET /api/files', () => {
     let testFileId;
 
-    beforeAll(async () => {
+    beforeAll(async() => {
       // Create a test file entry
       const fileResult = await executeQuery(
         'INSERT INTO files (file_name, file_type, file_size, file_path, organization_id, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
@@ -112,11 +112,11 @@ describeDb('Files API', () => {
       testFileId = fileResult.data.insertId;
     });
 
-    afterAll(async () => {
+    afterAll(async() => {
       await executeQuery('DELETE FROM files WHERE id = ?', [testFileId]);
     });
 
-    it('should get list of files', async () => {
+    it('should get list of files', async() => {
       const response = await request(app)
         .get('/api/files')
         .set('Authorization', `Bearer ${testToken}`)
@@ -126,7 +126,7 @@ describeDb('Files API', () => {
       expect(Array.isArray(response.body.data.files || response.body.data.data)).toBe(true);
     });
 
-    it('should fail to get files without authentication', async () => {
+    it('should fail to get files without authentication', async() => {
       const response = await request(app)
         .get('/api/files')
         .expect(401);
@@ -136,7 +136,7 @@ describeDb('Files API', () => {
   });
 
   describe('GET /api/files/stats', () => {
-    it('should get file statistics', async () => {
+    it('should get file statistics', async() => {
       const response = await request(app)
         .get('/api/files/stats')
         .set('Authorization', `Bearer ${testToken}`)
@@ -149,7 +149,7 @@ describeDb('Files API', () => {
   });
 
   describe('POST /api/files/folders', () => {
-    it('should create a new folder', async () => {
+    it('should create a new folder', async() => {
       const folderData = {
         folderName: 'Test Folder',
         parentId: null
@@ -168,7 +168,7 @@ describeDb('Files API', () => {
       await executeQuery('DELETE FROM folders WHERE id = ?', [response.body.data.id]);
     });
 
-    it('should fail to create folder without name', async () => {
+    it('should fail to create folder without name', async() => {
       const folderData = {
         parentId: null
       };
@@ -184,7 +184,7 @@ describeDb('Files API', () => {
   });
 
   describe('GET /api/files/folders', () => {
-    it('should get list of folders', async () => {
+    it('should get list of folders', async() => {
       const response = await request(app)
         .get('/api/files/folders')
         .set('Authorization', `Bearer ${testToken}`)
@@ -198,7 +198,7 @@ describeDb('Files API', () => {
   describe('DELETE /api/files/:id', () => {
     let testFileId;
 
-    beforeEach(async () => {
+    beforeEach(async() => {
       // Create a test file entry
       const fileResult = await executeQuery(
         'INSERT INTO files (file_name, file_type, file_size, file_path, organization_id, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
@@ -207,7 +207,7 @@ describeDb('Files API', () => {
       testFileId = fileResult.data.insertId;
     });
 
-    it('should delete a file successfully', async () => {
+    it('should delete a file successfully', async() => {
       const response = await request(app)
         .delete(`/api/files/${testFileId}`)
         .set('Authorization', `Bearer ${testToken}`)
@@ -216,7 +216,7 @@ describeDb('Files API', () => {
       expect(response.body.success).toBe(true);
     });
 
-    it('should fail to delete non-existent file', async () => {
+    it('should fail to delete non-existent file', async() => {
       const response = await request(app)
         .delete('/api/files/999999')
         .set('Authorization', `Bearer ${testToken}`)
@@ -229,7 +229,7 @@ describeDb('Files API', () => {
   describe('PUT /api/files/:id/rename', () => {
     let testFileId;
 
-    beforeAll(async () => {
+    beforeAll(async() => {
       // Create a test file entry
       const fileResult = await executeQuery(
         'INSERT INTO files (file_name, file_type, file_size, file_path, organization_id, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
@@ -238,11 +238,11 @@ describeDb('Files API', () => {
       testFileId = fileResult.data.insertId;
     });
 
-    afterAll(async () => {
+    afterAll(async() => {
       await executeQuery('DELETE FROM files WHERE id = ?', [testFileId]);
     });
 
-    it('should rename a file successfully', async () => {
+    it('should rename a file successfully', async() => {
       const response = await request(app)
         .put(`/api/files/${testFileId}/rename`)
         .set('Authorization', `Bearer ${testToken}`)
@@ -252,7 +252,7 @@ describeDb('Files API', () => {
       expect(response.body.success).toBe(true);
     });
 
-    it('should fail to rename without new name', async () => {
+    it('should fail to rename without new name', async() => {
       const response = await request(app)
         .put(`/api/files/${testFileId}/rename`)
         .set('Authorization', `Bearer ${testToken}`)

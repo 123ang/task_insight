@@ -18,7 +18,7 @@ const parseDurationMs = (value, fallback) => {
     s: 1000,
     m: 60 * 1000,
     h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000
   };
 
   return amount * multipliers[match[2]];
@@ -29,7 +29,9 @@ const hashRefreshToken = (token) => (
 );
 
 const tokenHashesMatch = (token, expectedHash) => {
-  if (!token || !expectedHash) return false;
+  if (!token || !expectedHash) {
+    return false;
+  }
 
   const actual = Buffer.from(hashRefreshToken(token), 'hex');
   const expected = Buffer.from(expectedHash, 'hex');
@@ -42,7 +44,7 @@ const createSessionTokens = ({
   secret,
   accessLifetime = process.env.JWT_EXPIRES_IN || DEFAULT_ACCESS_LIFETIME,
   refreshLifetime = process.env.JWT_REFRESH_EXPIRES_IN || DEFAULT_REFRESH_LIFETIME,
-  sessionId = crypto.randomUUID(),
+  sessionId = crypto.randomUUID()
 }) => {
   const accessToken = jwt.sign(
     {
@@ -51,7 +53,7 @@ const createSessionTokens = ({
       userId: user.id,
       email: user.email,
       role: user.role,
-      organizationId: user.organization_id,
+      organizationId: user.organization_id
     },
     secret,
     { expiresIn: accessLifetime }
@@ -60,7 +62,7 @@ const createSessionTokens = ({
     {
       kind: 'refresh',
       sid: sessionId,
-      userId: user.id,
+      userId: user.id
     },
     secret,
     { expiresIn: refreshLifetime }
@@ -73,8 +75,8 @@ const createSessionTokens = ({
       id: sessionId,
       userId: user.id,
       tokenHash: hashRefreshToken(refreshToken),
-      expiresAt: new Date(Date.now() + parseDurationMs(refreshLifetime, DEFAULT_REFRESH_LIFETIME)),
-    },
+      expiresAt: new Date(Date.now() + parseDurationMs(refreshLifetime, DEFAULT_REFRESH_LIFETIME))
+    }
   };
 };
 
@@ -82,5 +84,5 @@ module.exports = {
   createSessionTokens,
   hashRefreshToken,
   parseDurationMs,
-  tokenHashesMatch,
+  tokenHashesMatch
 };

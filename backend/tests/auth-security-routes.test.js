@@ -4,12 +4,12 @@ const request = require('supertest');
 
 jest.mock('../config/database', () => ({
   executeQuery: jest.fn(),
-  getConnection: jest.fn(),
+  getConnection: jest.fn()
 }));
 
 jest.mock('bcrypt', () => ({
-  compare: jest.fn(async () => true),
-  hash: jest.fn(async () => 'hashed-password'),
+  compare: jest.fn(async() => true),
+  hash: jest.fn(async() => 'hashed-password')
 }));
 
 const { executeQuery, getConnection } = require('../config/database');
@@ -29,20 +29,20 @@ const user = {
   role: 'member',
   organization_id: 12,
   organization_name: 'Example Org',
-  status: 'active',
+  status: 'active'
 };
 
 const success = (data = []) => ({ success: true, data });
 
 const createConnection = (handler) => ({
-  beginTransaction: jest.fn(async () => {}),
-  commit: jest.fn(async () => {}),
-  rollback: jest.fn(async () => {}),
+  beginTransaction: jest.fn(async() => { /* no-op */ }),
+  commit: jest.fn(async() => { /* no-op */ }),
+  rollback: jest.fn(async() => { /* no-op */ }),
   release: jest.fn(),
-  execute: jest.fn(async (sql, params = []) => {
+  execute: jest.fn(async(sql, params = []) => {
     const result = await handler(sql, params);
     return [result.data || result, []];
-  }),
+  })
 });
 
 describe('authentication security routes', () => {
@@ -52,9 +52,11 @@ describe('authentication security routes', () => {
     bcrypt.hash.mockResolvedValue('hashed-password');
   });
 
-  it('issues the refresh token only as a secure HttpOnly cookie and stores the session', async () => {
-    executeQuery.mockImplementation(async (sql) => {
-      if (sql.includes('FROM users u')) return success([user]);
+  it('issues the refresh token only as a secure HttpOnly cookie and stores the session', async() => {
+    executeQuery.mockImplementation(async(sql) => {
+      if (sql.includes('FROM users u')) {
+        return success([user]);
+      }
       return success({ insertId: 1, affectedRows: 1 });
     });
 
@@ -71,7 +73,7 @@ describe('authentication security routes', () => {
     expect(executeQuery.mock.calls.some(([sql]) => sql.includes('INSERT INTO auth_sessions'))).toBe(true);
   });
 
-  it('rejects public registration that supplies only an organization ID', async () => {
+  it('rejects public registration that supplies only an organization ID', async() => {
     executeQuery.mockResolvedValue(success({ insertId: 44, affectedRows: 1 }));
 
     const response = await request(app)
@@ -81,16 +83,18 @@ describe('authentication security routes', () => {
         password: 'TestPassword123',
         firstName: 'New',
         lastName: 'Member',
-        organizationId: 12,
+        organizationId: 12
       })
       .expect(400);
 
     expect(response.body.message).toMatch(/invitation/i);
   });
 
-  it('consumes a valid invitation atomically when registration succeeds', async () => {
-    const handler = async (sql) => {
-      if (sql.includes('FROM users WHERE email')) return success([]);
+  it('consumes a valid invitation atomically when registration succeeds', async() => {
+    const handler = async(sql) => {
+      if (sql.includes('FROM users WHERE email')) {
+        return success([]);
+      }
       if (sql.includes('FROM invitation_codes')) {
         return success([{
           id: 30,
@@ -100,10 +104,12 @@ describe('authentication security routes', () => {
           max_uses: 1,
           use_count: 0,
           revoked_at: null,
-          organization_status: 'active',
+          organization_status: 'active'
         }]);
       }
-      if (sql.includes('INSERT INTO users')) return success({ insertId: 44, affectedRows: 1 });
+      if (sql.includes('INSERT INTO users')) {
+        return success({ insertId: 44, affectedRows: 1 });
+      }
       return success({ affectedRows: 1 });
     };
     const connection = createConnection(handler);
@@ -118,13 +124,13 @@ describe('authentication security routes', () => {
         password: 'TestPassword123',
         firstName: 'New',
         lastName: 'Member',
-        invitationCode: 'INVITE123456',
+        invitationCode: 'INVITE123456'
       })
       .expect(201);
 
     const allSql = [
       ...executeQuery.mock.calls.map(([sql]) => sql),
-      ...connection.execute.mock.calls.map(([sql]) => sql),
+      ...connection.execute.mock.calls.map(([sql]) => sql)
     ];
     expect(allSql.some((sql) => (
       sql.includes('UPDATE invitation_codes') && sql.includes('use_count')
@@ -133,7 +139,7 @@ describe('authentication security routes', () => {
     expect(connection.commit).toHaveBeenCalledTimes(1);
   });
 
-  it('revokes the refresh session when logging out with only the cookie', async () => {
+  it('revokes the refresh session when logging out with only the cookie', async() => {
     const refreshToken = jwt.sign(
       { userId: user.id, sid: 'session-123', kind: 'refresh' },
       'test-secret',

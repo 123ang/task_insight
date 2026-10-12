@@ -13,7 +13,7 @@ const createResponse = () => {
   return res;
 };
 
-const runMiddleware = async (middleware, req) => {
+const runMiddleware = async(middleware, req) => {
   const res = createResponse();
   const next = jest.fn();
 
@@ -23,7 +23,7 @@ const runMiddleware = async (middleware, req) => {
 };
 
 const mockFileQueries = ({ file, shares = [] }) => {
-  executeQuery.mockImplementation(async (query, params = []) => {
+  executeQuery.mockImplementation(async(query, params = []) => {
     if (query.includes('FROM files WHERE id = ?')) {
       return file
         ? { success: true, data: [file] }
@@ -50,7 +50,7 @@ describe('requireFileAccess', () => {
     jest.clearAllMocks();
   });
 
-  it('denies same-organization members who do not own the file and have no share', async () => {
+  it('denies same-organization members who do not own the file and have no share', async() => {
     mockFileQueries({
       file: {
         id: 10,
@@ -80,7 +80,7 @@ describe('requireFileAccess', () => {
     }));
   });
 
-  it('does not allow active-file access to deleted files', async () => {
+  it('does not allow active-file access to deleted files', async() => {
     mockFileQueries({
       file: {
         id: 11,
@@ -111,7 +111,7 @@ describe('requireFileAccess', () => {
     }));
   });
 
-  it('allows the file owner to access an active file', async () => {
+  it('allows the file owner to access an active file', async() => {
     mockFileQueries({
       file: {
         id: 12,
@@ -148,7 +148,7 @@ describe('verifyToken session enforcement', () => {
     jest.clearAllMocks();
   });
 
-  it('accepts a typed access token only while its server session is active', async () => {
+  it('accepts a typed access token only while its server session is active', async() => {
     executeQuery.mockResolvedValue({
       success: true,
       data: [{
@@ -156,8 +156,8 @@ describe('verifyToken session enforcement', () => {
         email: 'member@example.com',
         role: 'member',
         status: 'active',
-        organization_id: 5,
-      }],
+        organization_id: 5
+      }]
     });
     const token = jwt.sign(
       { kind: 'access', sid: 'session-1', userId: 42 },
@@ -165,7 +165,7 @@ describe('verifyToken session enforcement', () => {
       { expiresIn: '1h' }
     );
     const req = {
-      header: jest.fn(() => `Bearer ${token}`),
+      header: jest.fn(() => `Bearer ${token}`)
     };
 
     const { res, next } = await runMiddleware(verifyToken, req);
@@ -178,14 +178,14 @@ describe('verifyToken session enforcement', () => {
     );
   });
 
-  it('rejects refresh tokens presented as bearer access tokens', async () => {
+  it('rejects refresh tokens presented as bearer access tokens', async() => {
     const token = jwt.sign(
       { kind: 'refresh', sid: 'session-1', userId: 42 },
       'test-secret',
       { expiresIn: '1h' }
     );
     const req = {
-      header: jest.fn(() => `Bearer ${token}`),
+      header: jest.fn(() => `Bearer ${token}`)
     };
 
     const { res, next } = await runMiddleware(verifyToken, req);
@@ -195,7 +195,7 @@ describe('verifyToken session enforcement', () => {
     expect(executeQuery).not.toHaveBeenCalled();
   });
 
-  it('rejects access tokens after their session is revoked', async () => {
+  it('rejects access tokens after their session is revoked', async() => {
     executeQuery.mockResolvedValue({ success: true, data: [] });
     const token = jwt.sign(
       { kind: 'access', sid: 'revoked-session', userId: 42 },
@@ -203,7 +203,7 @@ describe('verifyToken session enforcement', () => {
       { expiresIn: '1h' }
     );
     const req = {
-      header: jest.fn(() => `Bearer ${token}`),
+      header: jest.fn(() => `Bearer ${token}`)
     };
 
     const { res, next } = await runMiddleware(verifyToken, req);

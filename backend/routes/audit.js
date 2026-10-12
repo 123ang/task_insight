@@ -6,7 +6,7 @@ const { validatePagination, validateSearch, validateDateRange } = require('../mi
 const router = express.Router();
 
 // Get audit logs (platform owner or org admin)
-router.get('/', verifyToken, validatePagination, validateSearch, validateDateRange, async (req, res) => {
+router.get('/', verifyToken, validatePagination, validateSearch, validateDateRange, async(req, res) => {
   // Check permissions manually
   if (req.user.role !== 'platform_owner' && req.user.role !== 'organization_admin') {
     return res.status(403).json({
@@ -18,8 +18,8 @@ router.get('/', verifyToken, validatePagination, validateSearch, validateDateRan
     const { page = 1, limit = 20, q: search, action, resourceType, startDate, endDate, userId, organizationId } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Platform owner can see all logs, org admin only sees their org logs
     if (req.user.role === 'organization_admin') {
@@ -79,7 +79,7 @@ router.get('/', verifyToken, validatePagination, validateSearch, validateDateRan
       LEFT JOIN organizations o ON al.organization_id = o.id
       ${whereClause}
       ORDER BY al.created_at DESC
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const logsResult = await executeQuery(logsQuery, queryParams);
@@ -107,8 +107,8 @@ router.get('/', verifyToken, validatePagination, validateSearch, validateDateRan
       data: {
         data: logsResult.data, // Changed from 'logs' to 'data' to match PaginationResponse format
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -124,7 +124,7 @@ router.get('/', verifyToken, validatePagination, validateSearch, validateDateRan
 });
 
 // Get audit log by ID
-router.get('/:id', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/:id', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const { id } = req.params;
 
@@ -168,12 +168,12 @@ router.get('/:id', verifyToken, requireOrgAdmin, async (req, res) => {
 });
 
 // Get audit statistics
-router.get('/stats/overview', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/stats/overview', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const { organizationId, startDate, endDate } = req.query;
-    
-    let whereConditions = [];
-    let queryParams = [];
+
+    const whereConditions = [];
+    const queryParams = [];
 
     // Platform owner can see all stats, org admin only sees their org stats
     if (req.user.role === 'organization_admin') {
@@ -252,7 +252,7 @@ router.get('/stats/overview', verifyToken, requireOrgAdmin, async (req, res) => 
       queryParams
     );
 
-    if (!actionStats.success || !resourceTypeStats.success || !dailyActivity.success || 
+    if (!actionStats.success || !resourceTypeStats.success || !dailyActivity.success ||
         !topActiveUsers.success || !totalActivity.success) {
       return res.status(500).json({
         success: false,
@@ -280,12 +280,12 @@ router.get('/stats/overview', verifyToken, requireOrgAdmin, async (req, res) => 
 });
 
 // Export audit logs
-router.get('/export/csv', verifyToken, requirePlatformOwner, validateDateRange, async (req, res) => {
+router.get('/export/csv', verifyToken, requirePlatformOwner, validateDateRange, async(req, res) => {
   try {
     const { startDate, endDate, organizationId } = req.query;
 
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Organization filter
     if (organizationId) {
@@ -362,10 +362,10 @@ router.get('/export/csv', verifyToken, requirePlatformOwner, validateDateRange, 
 });
 
 // Get available filter options for audit logs
-router.get('/filters/options', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/filters/options', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Platform owner can see all options, org admin only sees their org options
     if (req.user.role === 'organization_admin') {

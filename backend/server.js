@@ -11,7 +11,7 @@ const {
   getAllowedCorsOrigins,
   getFrameAncestors,
   isOriginAllowed,
-  validateRequiredSecurityConfig,
+  validateRequiredSecurityConfig
 } = require('./config/security');
 const { logger, redactSensitive } = require('./utils/logger');
 
@@ -34,10 +34,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'frame-ancestors': getFrameAncestors(),
-    },
+      'frame-ancestors': getFrameAncestors()
+    }
   },
-  crossOriginEmbedderPolicy: false, // Allow embedding for previews
+  crossOriginEmbedderPolicy: false // Allow embedding for previews
 }));
 
 // CORS configuration
@@ -65,7 +65,7 @@ const globalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipRateLimit,
+  skip: skipRateLimit
 });
 const authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
@@ -76,7 +76,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipRateLimit,
+  skip: skipRateLimit
 });
 
 app.use(globalLimiter);
@@ -97,7 +97,7 @@ app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_
 
 // Increase server timeout for large file uploads (2 hours)
 // This is important for uploads of files up to 2GB
-const serverTimeout = parseInt(process.env.SERVER_TIMEOUT) || 7200000; // 2 hours default
+const serverTimeout = parseInt(process.env.SERVER_TIMEOUT, 10) || 7200000; // 2 hours default
 
 // Uploaded documents are served only through authenticated file routes.
 
@@ -129,7 +129,7 @@ app.use('*', (req, res) => {
 });
 
 // Global error handler
-app.use((error, req, res, next) => {
+app.use((error, req, res, _next) => { // 4 args: Express error handler
   logger.error('Global error handler', {
     message: error.message,
     code: error.code,
@@ -140,7 +140,7 @@ app.use((error, req, res, next) => {
     body: redactSensitive(req.body),
     stack: error.stack
   });
-  
+
   // Handle JSON parse errors
   if (error instanceof SyntaxError && error.message.includes('JSON')) {
     logger.warn('Invalid JSON request body', {
@@ -154,30 +154,30 @@ app.use((error, req, res, next) => {
       error: error.message
     });
   }
-  
+
   // Handle multer errors that weren't caught
   if (error.code === 'LIMIT_FILE_SIZE') {
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024 * 1024;
+    const maxSize = parseInt(process.env.MAX_FILE_SIZE, 10) || 2 * 1024 * 1024 * 1024;
     const maxSizeGB = (maxSize / (1024 * 1024 * 1024)).toFixed(2);
     return res.status(400).json({
       success: false,
       message: `File too large. Maximum file size is ${maxSizeGB} GB.`
     });
   }
-  
+
   const status = error.status || 500;
   res.status(status).json({
     success: false,
     message: status >= 500 ? 'Internal server error' : (error.message || 'Request failed'),
-    ...(process.env.NODE_ENV === 'development' && { 
+    ...(process.env.NODE_ENV === 'development' && {
       stack: error.stack,
-      code: error.code 
+      code: error.code
     })
   });
 });
 
 // Start server
-const startServer = async () => {
+const startServer = async() => {
   try {
     validateRequiredSecurityConfig();
 
@@ -195,7 +195,7 @@ const startServer = async () => {
         serverTimeoutMs: serverTimeout
       });
     });
-    
+
     // Set server timeout for large file uploads
     server.timeout = serverTimeout;
     server.keepAliveTimeout = serverTimeout;

@@ -20,7 +20,7 @@ const DEFAULT_ALLOWED_EXTENSIONS = [
   'ppt',
   'pptx',
   'zip',
-  'rar',
+  'rar'
 ];
 
 const EXTENSION_MIME_TYPES = {
@@ -40,7 +40,7 @@ const EXTENSION_MIME_TYPES = {
   ppt: ['application/vnd.ms-powerpoint', 'application/octet-stream'],
   pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip', 'application/octet-stream'],
   zip: ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
-  rar: ['application/vnd.rar', 'application/x-rar-compressed', 'application/octet-stream'],
+  rar: ['application/vnd.rar', 'application/x-rar-compressed', 'application/octet-stream']
 };
 
 const parseCsv = (value) => {
@@ -124,7 +124,7 @@ const validateUploadedFile = (file, policy = {}) => {
   return { success: true };
 };
 
-const getOrganizationUploadPolicy = async (organizationId) => {
+const getOrganizationUploadPolicy = async(organizationId) => {
   try {
     const result = await executeQuery(
       'SELECT allowed_file_types, allowed_mime_types, max_file_size, malware_scan_enabled FROM organizations WHERE id = ?',
@@ -140,20 +140,24 @@ const getOrganizationUploadPolicy = async (organizationId) => {
       allowedFileTypes: row.allowed_file_types,
       allowedMimeTypes: row.allowed_mime_types,
       maxFileSize: row.max_file_size,
-      malwareScanEnabled: row.malware_scan_enabled === 1 || row.malware_scan_enabled === true,
+      malwareScanEnabled: row.malware_scan_enabled === 1 || row.malware_scan_enabled === true
     };
   } catch (error) {
     logger.warn('Organization upload policy unavailable; falling back to defaults', {
       organizationId,
-      error: logger.serializeError(error),
+      error: logger.serializeError(error)
     });
     return {};
   }
 };
 
 const splitArgs = (value) => {
-  if (Array.isArray(value)) return value;
-  if (!value || typeof value !== 'string') return [];
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (!value || typeof value !== 'string') {
+    return [];
+  }
   return value.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((arg) => arg.replace(/^"|"$/g, '')) || [];
 };
 
@@ -180,18 +184,18 @@ const runMalwareScan = (filePath, options = {}) => {
           filePath: path.basename(filePath),
           exitCode: error.code,
           signal: error.signal,
-          stderr: stderr ? String(stderr).slice(0, 500) : undefined,
+          stderr: stderr ? String(stderr).slice(0, 500) : undefined
         });
         resolve({
           success: false,
-          message: 'File failed malware scanning and was rejected.',
+          message: 'File failed malware scanning and was rejected.'
         });
         return;
       }
 
       resolve({
         success: true,
-        output: stdout ? String(stdout).slice(0, 500) : undefined,
+        output: stdout ? String(stdout).slice(0, 500) : undefined
       });
     });
   });
@@ -204,5 +208,5 @@ module.exports = {
   getAllowedMimeTypes,
   getOrganizationUploadPolicy,
   runMalwareScan,
-  validateUploadedFile,
+  validateUploadedFile
 };

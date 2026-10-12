@@ -7,13 +7,13 @@ const { generateInvitationCode } = require('../utils/helpers');
 const router = express.Router();
 
 // Get all organizations
-router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateSearch, async (req, res) => {
+router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateSearch, async(req, res) => {
   try {
     const { page = 1, limit = 10, q: search, status } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Search filter
     if (search) {
@@ -53,7 +53,7 @@ router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateS
       GROUP BY o.id, o.name, o.description, o.storage_quota, o.storage_used, o.status,
                o.created_at, o.updated_at
       ORDER BY o.created_at DESC 
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const orgsResult = await executeQuery(orgsQuery, queryParams);
@@ -108,8 +108,8 @@ router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateS
       data: {
         data: mappedOrgs,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -126,12 +126,12 @@ router.get('/', verifyToken, requirePlatformOwner, validatePagination, validateS
 });
 
 // Get organization by ID
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', verifyToken, async(req, res) => {
   try {
     const { id } = req.params;
 
     // Check if user has access to this organization
-    if (req.user.role === 'organization_admin' && req.user.organization_id !== parseInt(id)) {
+    if (req.user.role === 'organization_admin' && req.user.organization_id !== parseInt(id, 10)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -171,7 +171,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 // Create organization
-router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async (req, res) => {
+router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async(req, res) => {
   try {
     const { name, description, storageQuota } = req.body;
 
@@ -196,7 +196,7 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
 
     while (!isUnique && attempts < maxAttempts) {
       invitationCode = generateInvitationCode().toUpperCase();
-      
+
       // Check if code already exists
       const codeCheck = await executeQuery(
         'SELECT id FROM invitation_codes WHERE code = ?',
@@ -270,7 +270,7 @@ router.post('/', verifyToken, requirePlatformOwner, validateOrganization, async 
 });
 
 // Update organization
-router.put('/:id', verifyToken, requirePlatformOwner, validateOrganization, async (req, res) => {
+router.put('/:id', verifyToken, requirePlatformOwner, validateOrganization, async(req, res) => {
   try {
     const { id } = req.params;
     const { name, description, storageQuota, status } = req.body;
@@ -368,7 +368,7 @@ router.put('/:id', verifyToken, requirePlatformOwner, validateOrganization, asyn
 });
 
 // Delete organization
-router.delete('/:id', verifyToken, requirePlatformOwner, async (req, res) => {
+router.delete('/:id', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     const { id } = req.params;
 
@@ -431,22 +431,22 @@ router.delete('/:id', verifyToken, requirePlatformOwner, async (req, res) => {
 });
 
 // Get organization users
-router.get('/:id/users', verifyToken, requireOrgAdmin, validatePagination, async (req, res) => {
+router.get('/:id/users', verifyToken, requireOrgAdmin, validatePagination, async(req, res) => {
   try {
     const { id } = req.params;
     const { page = 1, limit = 10, q: search, role, status } = req.query;
     const offset = (page - 1) * limit;
 
     // Check access permissions
-    if (req.user.role === 'organization_admin' && req.user.organization_id !== parseInt(id)) {
+    if (req.user.role === 'organization_admin' && req.user.organization_id !== parseInt(id, 10)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
     }
 
-    let whereConditions = ['u.organization_id = ?'];
-    let queryParams = [id];
+    const whereConditions = ['u.organization_id = ?'];
+    const queryParams = [id];
 
     // Search filter
     if (search) {
@@ -476,7 +476,7 @@ router.get('/:id/users', verifyToken, requireOrgAdmin, validatePagination, async
       FROM users u 
       ${whereClause}
       ORDER BY u.created_at DESC 
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const usersResult = await executeQuery(usersQuery, queryParams);
@@ -502,8 +502,8 @@ router.get('/:id/users', verifyToken, requireOrgAdmin, validatePagination, async
       data: {
         users: usersResult.data,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -519,7 +519,7 @@ router.get('/:id/users', verifyToken, requireOrgAdmin, validatePagination, async
 });
 
 // Get organization statistics
-router.get('/stats/overview', verifyToken, requirePlatformOwner, async (req, res) => {
+router.get('/stats/overview', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     // Get organization counts by status
     const statusStats = await executeQuery(

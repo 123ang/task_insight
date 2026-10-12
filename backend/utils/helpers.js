@@ -17,19 +17,23 @@ const generateInvitationCode = () => {
 
 // Format file size
 const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 Bytes';
-  
+  if (bytes === 0) {
+    return '0 Bytes';
+  }
+
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 };
 
 // Format date
 const formatDate = (date, format = 'YYYY-MM-DD HH:mm:ss') => {
-  if (!date) return null;
-  
+  if (!date) {
+    return null;
+  }
+
   const d = new Date(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -37,7 +41,7 @@ const formatDate = (date, format = 'YYYY-MM-DD HH:mm:ss') => {
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
-  
+
   return format
     .replace('YYYY', year)
     .replace('MM', month)
@@ -57,23 +61,23 @@ const isValidEmail = (email) => {
 const validatePassword = (password) => {
   const errors = [];
   const value = password || '';
-  
+
   if (value.length < 12) {
     errors.push('Password must be at least 12 characters long');
   }
-  
+
   if (!/[a-z]/.test(value)) {
     errors.push('Password must contain at least one lowercase letter');
   }
-  
+
   if (!/[A-Z]/.test(value)) {
     errors.push('Password must contain at least one uppercase letter');
   }
-  
+
   if (!/\d/.test(value)) {
     errors.push('Password must contain at least one number');
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
@@ -103,10 +107,10 @@ const isAllowedFileType = (filename, allowedTypes) => {
 const calculatePagination = (page, limit, total) => {
   const totalPages = Math.ceil(total / limit);
   const offset = (page - 1) * limit;
-  
+
   return {
-    page: parseInt(page),
-    limit: parseInt(limit),
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
     total,
     totalPages,
     offset,
@@ -120,16 +124,16 @@ const generateSearchConditions = (searchTerm, searchFields) => {
   if (!searchTerm || !searchFields || searchFields.length === 0) {
     return { conditions: [], params: [] };
   }
-  
+
   const conditions = [];
   const params = [];
   const searchPattern = `%${searchTerm}%`;
-  
+
   searchFields.forEach(field => {
     conditions.push(`${field} LIKE ?`);
     params.push(searchPattern);
   });
-  
+
   return {
     conditions: [`(${conditions.join(' OR ')})`],
     params
@@ -140,17 +144,17 @@ const generateSearchConditions = (searchTerm, searchFields) => {
 const generateDateRangeConditions = (startDate, endDate, dateField = 'created_at') => {
   const conditions = [];
   const params = [];
-  
+
   if (startDate) {
     conditions.push(`${dateField} >= ?`);
     params.push(startDate);
   }
-  
+
   if (endDate) {
     conditions.push(`${dateField} <= ?`);
     params.push(endDate);
   }
-  
+
   return { conditions, params };
 };
 
@@ -178,11 +182,11 @@ const generateErrorResponse = (message, statusCode = 400, errors = null) => {
     success: false,
     message
   };
-  
+
   if (errors) {
     response.errors = errors;
   }
-  
+
   return { response, statusCode };
 };
 
@@ -192,11 +196,11 @@ const generateSuccessResponse = (message, data = null, statusCode = 200) => {
     success: true,
     message
   };
-  
+
   if (data) {
     response.data = data;
   }
-  
+
   return { response, statusCode };
 };
 
@@ -207,16 +211,26 @@ const deepClone = (obj) => {
 
 // Check if value is empty
 const isEmpty = (value) => {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') return value.trim().length === 0;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.keys(value).length === 0;
+  if (value === null || value === undefined) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    return value.trim().length === 0;
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+  if (typeof value === 'object') {
+    return Object.keys(value).length === 0;
+  }
   return false;
 };
 
 // Truncate string
 const truncateString = (str, maxLength = 100, suffix = '...') => {
-  if (!str || str.length <= maxLength) return str;
+  if (!str || str.length <= maxLength) {
+    return str;
+  }
   return str.substring(0, maxLength - suffix.length) + suffix;
 };
 
@@ -243,7 +257,9 @@ const generateUUID = () => {
 
 // Calculate percentage
 const calculatePercentage = (value, total) => {
-  if (total === 0) return 0;
+  if (total === 0) {
+    return 0;
+  }
   return Math.round((value / total) * 100 * 100) / 100; // Round to 2 decimal places
 };
 
@@ -253,12 +269,14 @@ const sleep = (ms) => {
 };
 
 // Retry function for async operations
-const retry = async (fn, maxAttempts = 3, delay = 1000) => {
+const retry = async(fn, maxAttempts = 3, delay = 1000) => {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      if (attempt === maxAttempts) throw error;
+      if (attempt === maxAttempts) {
+        throw error;
+      }
       await sleep(delay * attempt);
     }
   }

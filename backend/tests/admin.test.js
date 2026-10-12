@@ -9,7 +9,7 @@ describeDb('Admin API', () => {
   let testOrgId;
 
   // Set up test data before all tests
-  beforeAll(async () => {
+  beforeAll(async() => {
     // Create test organization
     const orgResult = await executeQuery(
       'INSERT INTO organizations (name, description, storage_quota, status) VALUES (?, ?, ?, ?)',
@@ -21,7 +21,7 @@ describeDb('Admin API', () => {
     const bcrypt = require('bcrypt');
     const jwt = require('jsonwebtoken');
     const hashedPassword = await bcrypt.hash('AdminPassword123', 12);
-    
+
     const adminResult = await executeQuery(
       'INSERT INTO users (email, password_hash, first_name, last_name, role, status) VALUES (?, ?, ?, ?, ?, ?)',
       ['admin@taskinsight.com', hashedPassword, 'Admin', 'User', 'platform_owner', 'active']
@@ -29,9 +29,9 @@ describeDb('Admin API', () => {
     adminUserId = adminResult.data.insertId;
 
     adminToken = jwt.sign(
-      { 
-        userId: adminUserId, 
-        email: 'admin@taskinsight.com', 
+      {
+        userId: adminUserId,
+        email: 'admin@taskinsight.com',
         role: 'platform_owner'
       },
       process.env.JWT_SECRET || 'test-secret',
@@ -40,13 +40,13 @@ describeDb('Admin API', () => {
   });
 
   // Clean up after all tests
-  afterAll(async () => {
+  afterAll(async() => {
     await executeQuery('DELETE FROM users WHERE id = ?', [adminUserId]);
     await executeQuery('DELETE FROM organizations WHERE id = ?', [testOrgId]);
   });
 
   describe('GET /api/admin/stats', () => {
-    it('should get dashboard statistics', async () => {
+    it('should get dashboard statistics', async() => {
       const response = await request(app)
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -59,7 +59,7 @@ describeDb('Admin API', () => {
       expect(response.body.data).toHaveProperty('totalStorage');
     });
 
-    it('should fail without admin authentication', async () => {
+    it('should fail without admin authentication', async() => {
       const response = await request(app)
         .get('/api/admin/stats')
         .expect(401);
@@ -69,7 +69,7 @@ describeDb('Admin API', () => {
   });
 
   describe('GET /api/admin/organizations', () => {
-    it('should get list of organizations', async () => {
+    it('should get list of organizations', async() => {
       const response = await request(app)
         .get('/api/admin/organizations')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -79,7 +79,7 @@ describeDb('Admin API', () => {
       expect(Array.isArray(response.body.data.data || response.body.data)).toBe(true);
     });
 
-    it('should support pagination', async () => {
+    it('should support pagination', async() => {
       const response = await request(app)
         .get('/api/admin/organizations?page=1&limit=10')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -94,7 +94,7 @@ describeDb('Admin API', () => {
   });
 
   describe('POST /api/admin/organizations', () => {
-    it('should create a new organization', async () => {
+    it('should create a new organization', async() => {
       const orgData = {
         name: 'New Test Organization',
         description: 'Test description',
@@ -116,7 +116,7 @@ describeDb('Admin API', () => {
       await executeQuery('DELETE FROM organizations WHERE id = ?', [response.body.data.id]);
     });
 
-    it('should fail to create organization without required fields', async () => {
+    it('should fail to create organization without required fields', async() => {
       const orgData = {
         description: 'Test description'
       };
@@ -132,7 +132,7 @@ describeDb('Admin API', () => {
   });
 
   describe('GET /api/admin/users', () => {
-    it('should get list of users', async () => {
+    it('should get list of users', async() => {
       const response = await request(app)
         .get('/api/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -142,7 +142,7 @@ describeDb('Admin API', () => {
       expect(Array.isArray(response.body.data.data || response.body.data)).toBe(true);
     });
 
-    it('should filter users by organization', async () => {
+    it('should filter users by organization', async() => {
       const response = await request(app)
         .get(`/api/admin/users?organizationId=${testOrgId}`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -153,7 +153,7 @@ describeDb('Admin API', () => {
   });
 
   describe('POST /api/admin/invitations', () => {
-    it('should generate invitation codes', async () => {
+    it('should generate invitation codes', async() => {
       const invitationData = {
         organizationId: testOrgId,
         role: 'member',
@@ -177,7 +177,7 @@ describeDb('Admin API', () => {
       }
     });
 
-    it('should fail without organization ID', async () => {
+    it('should fail without organization ID', async() => {
       const invitationData = {
         role: 'member',
         count: 5
@@ -194,7 +194,7 @@ describeDb('Admin API', () => {
   });
 
   describe('GET /api/admin/invitations', () => {
-    it('should get list of invitation codes', async () => {
+    it('should get list of invitation codes', async() => {
       const response = await request(app)
         .get('/api/admin/invitations')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -206,7 +206,7 @@ describeDb('Admin API', () => {
   });
 
   describe('GET /api/admin/activity', () => {
-    it('should get recent activity logs', async () => {
+    it('should get recent activity logs', async() => {
       const response = await request(app)
         .get('/api/admin/activity')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -216,7 +216,7 @@ describeDb('Admin API', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    it('should support date range filtering', async () => {
+    it('should support date range filtering', async() => {
       const startDate = '2024-01-01';
       const endDate = '2024-12-31';
 
@@ -230,7 +230,7 @@ describeDb('Admin API', () => {
   });
 
   describe('GET /api/admin/storage', () => {
-    it('should get storage statistics', async () => {
+    it('should get storage statistics', async() => {
       const response = await request(app)
         .get('/api/admin/storage')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -243,7 +243,7 @@ describeDb('Admin API', () => {
   });
 
   describe('PUT /api/admin/organizations/:id', () => {
-    it('should update an organization', async () => {
+    it('should update an organization', async() => {
       const updateData = {
         description: 'Updated description',
         status: 'active'
@@ -258,7 +258,7 @@ describeDb('Admin API', () => {
       expect(response.body.success).toBe(true);
     });
 
-    it('should fail to update non-existent organization', async () => {
+    it('should fail to update non-existent organization', async() => {
       const updateData = {
         description: 'Updated description'
       };
@@ -276,11 +276,11 @@ describeDb('Admin API', () => {
   describe('PUT /api/admin/users/:id/status', () => {
     let testUserId;
 
-    beforeAll(async () => {
+    beforeAll(async() => {
       // Create a test user
       const bcrypt = require('bcrypt');
       const hashedPassword = await bcrypt.hash('TestPassword123', 12);
-      
+
       const userResult = await executeQuery(
         'INSERT INTO users (email, password_hash, first_name, last_name, organization_id, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['testuser@example.com', hashedPassword, 'Test', 'User', testOrgId, 'member', 'active']
@@ -288,11 +288,11 @@ describeDb('Admin API', () => {
       testUserId = userResult.data.insertId;
     });
 
-    afterAll(async () => {
+    afterAll(async() => {
       await executeQuery('DELETE FROM users WHERE id = ?', [testUserId]);
     });
 
-    it('should update user status', async () => {
+    it('should update user status', async() => {
       const response = await request(app)
         .put(`/api/admin/users/${testUserId}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -302,7 +302,7 @@ describeDb('Admin API', () => {
       expect(response.body.success).toBe(true);
     });
 
-    it('should fail with invalid status', async () => {
+    it('should fail with invalid status', async() => {
       const response = await request(app)
         .put(`/api/admin/users/${testUserId}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
@@ -316,21 +316,21 @@ describeDb('Admin API', () => {
   describe('Authorization', () => {
     let memberToken;
 
-    beforeAll(async () => {
+    beforeAll(async() => {
       // Create a regular member user
       const bcrypt = require('bcrypt');
       const jwt = require('jsonwebtoken');
       const hashedPassword = await bcrypt.hash('MemberPassword123', 12);
-      
+
       const memberResult = await executeQuery(
         'INSERT INTO users (email, password_hash, first_name, last_name, organization_id, role, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['member@example.com', hashedPassword, 'Member', 'User', testOrgId, 'member', 'active']
       );
 
       memberToken = jwt.sign(
-        { 
-          userId: memberResult.data.insertId, 
-          email: 'member@example.com', 
+        {
+          userId: memberResult.data.insertId,
+          email: 'member@example.com',
           role: 'member',
           organizationId: testOrgId
         },
@@ -339,12 +339,12 @@ describeDb('Admin API', () => {
       );
 
       // Clean up after test
-      setTimeout(async () => {
+      setTimeout(async() => {
         await executeQuery('DELETE FROM users WHERE email = ?', ['member@example.com']);
       }, 5000);
     });
 
-    it('should deny access to admin routes for non-admin users', async () => {
+    it('should deny access to admin routes for non-admin users', async() => {
       const response = await request(app)
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${memberToken}`)

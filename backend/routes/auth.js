@@ -15,12 +15,14 @@ const cookieOptions = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict',
-  path: '/api/auth',
+  path: '/api/auth'
 });
 
 const readCookie = (req, name) => {
   const header = req.headers.cookie;
-  if (!header) return null;
+  if (!header) {
+    return null;
+  }
 
   const prefix = `${name}=`;
   const pair = header.split(';').map((value) => value.trim())
@@ -36,7 +38,7 @@ const clearRefreshCookie = (res) => {
 const setRefreshCookie = (res, token, expiresAt) => {
   res.cookie(REFRESH_COOKIE, token, {
     ...cookieOptions(),
-    expires: expiresAt,
+    expires: expiresAt
   });
 };
 
@@ -48,7 +50,7 @@ const publicUser = (user) => ({
   role: user.role,
   organizationId: user.organization_id,
   organizationName: user.organization_name,
-  status: user.status,
+  status: user.status
 });
 
 const registrationError = (message, status = 400) => {
@@ -58,13 +60,13 @@ const registrationError = (message, status = 400) => {
   return error;
 };
 
-router.post('/register', validateUserRegistration, async (req, res) => {
+router.post('/register', validateUserRegistration, async(req, res) => {
   const { email, password, firstName, lastName, invitationCode } = req.body;
 
   if (!invitationCode || !invitationCode.trim()) {
     return res.status(400).json({
       success: false,
-      message: 'A valid invitation code is required',
+      message: 'A valid invitation code is required'
     });
   }
 
@@ -115,7 +117,7 @@ router.post('/register', validateUserRegistration, async (req, res) => {
         lastName,
         invitation.organization_id,
         invitation.role || 'member',
-        'active',
+        'active'
       ]
     );
 
@@ -144,8 +146,8 @@ router.post('/register', validateUserRegistration, async (req, res) => {
         JSON.stringify({
           email,
           organizationId: invitation.organization_id,
-          invitationId: invitation.id,
-        }),
+          invitationId: invitation.id
+        })
       ]
     );
 
@@ -158,32 +160,32 @@ router.post('/register', validateUserRegistration, async (req, res) => {
         userId: userResult.insertId,
         email,
         firstName,
-        lastName,
-      },
+        lastName
+      }
     });
   } catch (error) {
     if (connection) {
-      await connection.rollback().catch(() => {});
+      await connection.rollback().catch(() => { /* keep the original error */ });
     }
 
     if (error.isPublic) {
       return res.status(error.status).json({
         success: false,
-        message: error.message,
+        message: error.message
       });
     }
 
     logger.error('Registration error', { error: logger.serializeError(error) });
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: 'Internal server error'
     });
   } finally {
     connection?.release();
   }
 });
 
-router.post('/login', validateUserLogin, async (req, res) => {
+router.post('/login', validateUserLogin, async(req, res) => {
   try {
     const { email, password, adminLogin } = req.body;
     const userResult = await executeQuery(
@@ -202,7 +204,7 @@ router.post('/login', validateUserLogin, async (req, res) => {
     if (user.status !== 'active') {
       return res.status(401).json({
         success: false,
-        message: 'Account is inactive. Please contact support.',
+        message: 'Account is inactive. Please contact support.'
       });
     }
 
@@ -222,7 +224,7 @@ router.post('/login', validateUserLogin, async (req, res) => {
         tokens.session.id,
         tokens.session.userId,
         tokens.session.tokenHash,
-        tokens.session.expiresAt,
+        tokens.session.expiresAt
       ]
     );
     if (!sessionResult.success) {
@@ -240,7 +242,7 @@ router.post('/login', validateUserLogin, async (req, res) => {
         'LOGIN',
         'USER',
         user.id,
-        JSON.stringify({ email, adminLogin: !!adminLogin }),
+        JSON.stringify({ email, adminLogin: !!adminLogin })
       ]
     );
 
@@ -250,8 +252,8 @@ router.post('/login', validateUserLogin, async (req, res) => {
       message: 'Login successful',
       data: {
         token: tokens.accessToken,
-        user: publicUser(user),
-      },
+        user: publicUser(user)
+      }
     });
   } catch (error) {
     logger.error('Login error', { error: logger.serializeError(error) });
@@ -259,7 +261,7 @@ router.post('/login', validateUserLogin, async (req, res) => {
   }
 });
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', async(req, res) => {
   const refreshToken = readCookie(req, REFRESH_COOKIE);
   if (!refreshToken) {
     clearRefreshCookie(res);
@@ -310,7 +312,7 @@ router.post('/refresh', async (req, res) => {
       role: session.role,
       organization_id: session.organization_id,
       organization_name: session.organization_name,
-      status: session.status,
+      status: session.status
     };
     const nextTokens = createSessionTokens({ user, secret: getJwtSecret() });
     const connection = await getConnection();
@@ -334,12 +336,12 @@ router.post('/refresh', async (req, res) => {
           nextTokens.session.id,
           nextTokens.session.userId,
           nextTokens.session.tokenHash,
-          nextTokens.session.expiresAt,
+          nextTokens.session.expiresAt
         ]
       );
       await connection.commit();
     } catch (error) {
-      await connection.rollback().catch(() => {});
+      await connection.rollback().catch(() => { /* keep the original error */ });
       throw error;
     } finally {
       connection.release();
@@ -351,8 +353,8 @@ router.post('/refresh', async (req, res) => {
       message: 'Token refreshed successfully',
       data: {
         token: nextTokens.accessToken,
-        user: publicUser(user),
-      },
+        user: publicUser(user)
+      }
     });
   } catch (error) {
     clearRefreshCookie(res);
@@ -360,12 +362,12 @@ router.post('/refresh', async (req, res) => {
       success: false,
       message: error.name === 'TokenExpiredError'
         ? 'Refresh session expired'
-        : 'Refresh session is invalid',
+        : 'Refresh session is invalid'
     });
   }
 });
 
-router.post('/logout', async (req, res) => {
+router.post('/logout', async(req, res) => {
   const refreshToken = readCookie(req, REFRESH_COOKIE);
 
   try {
@@ -389,7 +391,7 @@ router.post('/logout', async (req, res) => {
   return res.json({ success: true, message: 'Logout successful' });
 });
 
-router.get('/profile', verifyToken, async (req, res) => {
+router.get('/profile', verifyToken, async(req, res) => {
   try {
     const userResult = await executeQuery(
       `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.status,
@@ -415,7 +417,7 @@ router.get('/verify', verifyToken, (req, res) => {
   res.json({
     success: true,
     message: 'Token is valid',
-    data: { user: req.user },
+    data: { user: req.user }
   });
 });
 

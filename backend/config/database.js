@@ -16,7 +16,7 @@ const dbConfig = {
   keepAliveInitialDelay: 0,
   charset: 'utf8mb4',
   // Ensure UTF-8 encoding for all connections
-  typeCast: function (field, next) {
+  typeCast(field, next) {
     if (field.type === 'VAR_STRING' || field.type === 'STRING' || field.type === 'TEXT') {
       return field.string();
     }
@@ -37,7 +37,7 @@ pool.on('connection', (connection) => {
 });
 
 // Test database connection
-const testConnection = async () => {
+const testConnection = async() => {
   try {
     const connection = await pool.getConnection();
     logger.info('Database connected successfully');
@@ -50,7 +50,7 @@ const testConnection = async () => {
 };
 
 // Execute query with error handling
-const executeQuery = async (query, params = []) => {
+const executeQuery = async(query, params = []) => {
   try {
     // Use pool.execute which automatically manages connections
     // The charset is set via the pool's 'connection' event handler
@@ -63,7 +63,7 @@ const executeQuery = async (query, params = []) => {
 };
 
 // Get connection from pool
-const getConnection = async () => {
+const getConnection = async() => {
   try {
     return await pool.getConnection();
   } catch (error) {

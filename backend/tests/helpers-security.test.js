@@ -1,6 +1,6 @@
 const {
   generateInvitationCode,
-  validatePassword,
+  validatePassword
 } = require('../utils/helpers');
 
 describe('security helpers', () => {

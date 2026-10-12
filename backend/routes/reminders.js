@@ -5,13 +5,13 @@ const { verifyToken } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all reminders for the current user
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', verifyToken, async(req, res) => {
   try {
     const { status, page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
-    let whereConditions = ['r.user_id = ?'];
-    let queryParams = [req.user.id];
+    const whereConditions = ['r.user_id = ?'];
+    const queryParams = [req.user.id];
 
     // Filter by status
     if (status) {
@@ -34,7 +34,7 @@ router.get('/', verifyToken, async (req, res) => {
       LEFT JOIN folders fo ON f.folder_id = fo.id
       ${whereClause}
       ORDER BY r.reminder_datetime ASC
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const remindersResult = await executeQuery(remindersQuery, queryParams);
@@ -59,10 +59,10 @@ router.get('/', verifyToken, async (req, res) => {
       data: {
         reminders: remindersResult.data || [],
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data?.[0]?.total || 0,
-          pages: Math.ceil((countResult.data?.[0]?.total || 0) / parseInt(limit))
+          pages: Math.ceil((countResult.data?.[0]?.total || 0) / parseInt(limit, 10))
         }
       }
     });
@@ -76,7 +76,7 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // Get pending/upcoming reminders (for notification bell)
-router.get('/pending', verifyToken, async (req, res) => {
+router.get('/pending', verifyToken, async(req, res) => {
   try {
     // Get reminders that are due (past or within next 24 hours) and not yet notified
     const remindersQuery = `
@@ -130,10 +130,10 @@ router.get('/pending', verifyToken, async (req, res) => {
 });
 
 // Get to-do documents (files with pending reminders)
-router.get('/todo-documents', verifyToken, async (req, res) => {
+router.get('/todo-documents', verifyToken, async(req, res) => {
   try {
     const { page = 1, limit = 20, filter = 'all' } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let dateFilter = '';
     if (filter === 'overdue') {
@@ -169,7 +169,7 @@ router.get('/todo-documents', verifyToken, async (req, res) => {
           ELSE 1 
         END,
         r.reminder_datetime ASC
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const documentsResult = await executeQuery(documentsQuery, [req.user.id]);
@@ -210,10 +210,10 @@ router.get('/todo-documents', verifyToken, async (req, res) => {
       data: {
         documents: documentsResult.data || [],
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data?.[0]?.total || 0,
-          pages: Math.ceil((countResult.data?.[0]?.total || 0) / parseInt(limit))
+          pages: Math.ceil((countResult.data?.[0]?.total || 0) / parseInt(limit, 10))
         },
         summary: {
           overdue: summaryResult.data?.[0]?.overdue_count || 0,
@@ -233,7 +233,7 @@ router.get('/todo-documents', verifyToken, async (req, res) => {
 });
 
 // Create a reminder for a file
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, async(req, res) => {
   try {
     const { fileId, reminderDatetime, title, note, priority, isRecurring, recurrencePattern, recurrenceEndDate } = req.body;
 
@@ -316,7 +316,7 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // Update a reminder
-router.put('/:reminderId', verifyToken, async (req, res) => {
+router.put('/:reminderId', verifyToken, async(req, res) => {
   try {
     const { reminderId } = req.params;
     const { reminderDatetime, title, note, priority, status, isRecurring, recurrencePattern, recurrenceEndDate } = req.body;
@@ -367,7 +367,7 @@ router.put('/:reminderId', verifyToken, async (req, res) => {
     if (status !== undefined) {
       updateFields.push('status = ?');
       updateValues.push(status);
-      
+
       // Set completed_at if marking as completed
       if (status === 'completed') {
         updateFields.push('completed_at = NOW()');
@@ -421,7 +421,7 @@ router.put('/:reminderId', verifyToken, async (req, res) => {
 });
 
 // Mark reminder as completed
-router.post('/:reminderId/complete', verifyToken, async (req, res) => {
+router.post('/:reminderId/complete', verifyToken, async(req, res) => {
   try {
     const { reminderId } = req.params;
 
@@ -460,23 +460,25 @@ router.post('/:reminderId/complete', verifyToken, async (req, res) => {
       let nextDate;
 
       switch (reminder.recurrence_pattern) {
-        case 'daily':
-          nextDate = new Date(currentDate.setDate(currentDate.getDate() + 1));
-          break;
-        case 'weekly':
-          nextDate = new Date(currentDate.setDate(currentDate.getDate() + 7));
-          break;
-        case 'monthly':
-          nextDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
-          break;
-        case 'yearly':
-          nextDate = new Date(currentDate.setFullYear(currentDate.getFullYear() + 1));
-          break;
+      case 'daily':
+        nextDate = new Date(currentDate.setDate(currentDate.getDate() + 1));
+        break;
+      case 'weekly':
+        nextDate = new Date(currentDate.setDate(currentDate.getDate() + 7));
+        break;
+      case 'monthly':
+        nextDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
+        break;
+      case 'yearly':
+        nextDate = new Date(currentDate.setFullYear(currentDate.getFullYear() + 1));
+        break;
+      default:
+        nextDate = null; // unknown pattern: don't schedule a next occurrence
       }
 
       // Check if next date is before recurrence end date
       const endDate = reminder.recurrence_end_date ? new Date(reminder.recurrence_end_date) : null;
-      if (!endDate || nextDate <= endDate) {
+      if (nextDate && (!endDate || nextDate <= endDate)) {
         // Get original reminder details
         const originalResult = await executeQuery(
           'SELECT file_id, title, note, priority, is_recurring, recurrence_pattern, recurrence_end_date, organization_id FROM file_reminders WHERE id = ?',
@@ -520,7 +522,7 @@ router.post('/:reminderId/complete', verifyToken, async (req, res) => {
 });
 
 // Dismiss a reminder
-router.post('/:reminderId/dismiss', verifyToken, async (req, res) => {
+router.post('/:reminderId/dismiss', verifyToken, async(req, res) => {
   try {
     const { reminderId } = req.params;
 
@@ -567,7 +569,7 @@ router.post('/:reminderId/dismiss', verifyToken, async (req, res) => {
 });
 
 // Delete a reminder
-router.delete('/:reminderId', verifyToken, async (req, res) => {
+router.delete('/:reminderId', verifyToken, async(req, res) => {
   try {
     const { reminderId } = req.params;
 
@@ -611,7 +613,7 @@ router.delete('/:reminderId', verifyToken, async (req, res) => {
 });
 
 // Get reminders for a specific file
-router.get('/file/:fileId', verifyToken, async (req, res) => {
+router.get('/file/:fileId', verifyToken, async(req, res) => {
   try {
     const { fileId } = req.params;
 

@@ -10,7 +10,7 @@ module.exports = {
     'eslint:recommended'
   ],
   parserOptions: {
-    ecmaVersion: 2020,
+    ecmaVersion: 2021,
     sourceType: 'module'
   },
   rules: {
@@ -18,7 +18,7 @@ module.exports = {
     'linebreak-style': ['error', 'unix'],
     'quotes': ['error', 'single'],
     'semi': ['error', 'always'],
-    'no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
+    'no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'ignoreRestSiblings': true }],
     'no-console': 'warn',
     'no-debugger': 'error',
     'prefer-const': 'error',
@@ -46,12 +46,13 @@ module.exports = {
     'array-bracket-spacing': ['error', 'never'],
     'block-spacing': 'error',
     'brace-style': ['error', '1tbs'],
-    'camelcase': ['error', { 'properties': 'never' }],
-    'consistent-return': 'error',
+    'camelcase': ['error', { 'properties': 'never', 'ignoreDestructuring': true }],
+    // Express handlers mix `return res.json()` early exits with fall-through next().
+    'consistent-return': 'off',
     'curly': 'error',
     'default-case': 'error',
     'dot-notation': 'error',
-    'eqeqeq': 'error',
+    'eqeqeq': ['error', 'always', { 'null': 'ignore' }],
     'guard-for-in': 'error',
     'no-alert': 'error',
     'no-caller': 'error',

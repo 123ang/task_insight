@@ -1,13 +1,13 @@
 const express = require('express');
 const { executeQuery } = require('../config/database');
 const { verifyToken, requirePlatformOwner, requireOrgAdmin } = require('../middleware/auth');
-const { validatePagination, validateSearch, validateDateRange } = require('../middleware/validation');
+const { validatePagination, validateSearch } = require('../middleware/validation');
 const { generateInvitationCode } = require('../utils/helpers');
 
 const router = express.Router();
 
 // Dashboard statistics
-router.get('/dashboard/stats', verifyToken, requirePlatformOwner, async (req, res) => {
+router.get('/dashboard/stats', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     // Get platform overview statistics
     const platformStats = await executeQuery(`
@@ -69,7 +69,7 @@ router.get('/dashboard/stats', verifyToken, requirePlatformOwner, async (req, re
         (SELECT COUNT(*) FROM audit_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)) as daily_activity
     `);
 
-    if (!platformStats.success || !recentActivity.success || !userRegistrations.success || 
+    if (!platformStats.success || !recentActivity.success || !userRegistrations.success ||
         !orgCreations.success || !topOrgsByStorage.success || !systemHealth.success) {
       return res.status(500).json({
         success: false,
@@ -98,13 +98,13 @@ router.get('/dashboard/stats', verifyToken, requirePlatformOwner, async (req, re
 });
 
 // Get recent activity timeline
-router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagination, async (req, res) => {
+router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagination, async(req, res) => {
   try {
     const { page = 1, limit = 20, action, userId, organizationId } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = [];
-    let queryParams = [];
+    const whereConditions = [];
+    const queryParams = [];
 
     // Filter by action
     if (action) {
@@ -133,7 +133,7 @@ router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagi
       LEFT JOIN organizations o ON u.organization_id = o.id
       ${whereClause}
       ORDER BY al.created_at DESC
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const activityResult = await executeQuery(activityQuery, queryParams);
@@ -160,8 +160,8 @@ router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagi
       data: {
         data: activityResult.data,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -177,7 +177,7 @@ router.get('/activity/timeline', verifyToken, requirePlatformOwner, validatePagi
 });
 
 // Generate invitation code
-router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (req, res) => {
+router.post('/invitations/generate', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     const { organizationId, role = 'member', expiresInDays = 7, maxUses = 1 } = req.body;
     const normalizedExpiresInDays = Math.min(Math.max(parseInt(expiresInDays, 10) || 7, 1), 365);
@@ -275,13 +275,13 @@ router.post('/invitations/generate', verifyToken, requirePlatformOwner, async (r
 });
 
 // Get all active invitations.
-router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination, validateSearch, async (req, res) => {
+router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination, validateSearch, async(req, res) => {
   try {
     const { page = 1, limit = 10, q: search, organizationId } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = ['i.revoked_at IS NULL'];
-    let queryParams = [];
+    const whereConditions = ['i.revoked_at IS NULL'];
+    const queryParams = [];
 
     // Search filter
     if (search) {
@@ -313,7 +313,7 @@ router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination
       LEFT JOIN users u ON i.generated_by = u.id
       ${whereClause}
       ORDER BY i.created_at DESC
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const invitationsResult = await executeQuery(invitationsQuery, queryParams);
@@ -340,8 +340,8 @@ router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination
       data: {
         data: invitationsResult.data,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -357,7 +357,7 @@ router.get('/invitations', verifyToken, requirePlatformOwner, validatePagination
 });
 
 // Revoke the active invitation for an organization.
-router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner, async (req, res) => {
+router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     const { organizationId } = req.params;
 
@@ -392,7 +392,7 @@ router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner,
     // Log deletion
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, parseInt(organizationId), 'DELETE', 'INVITATION', invitationResult.data[0].id, JSON.stringify({ code: invitationResult.data[0].code })]
+      [req.user.id, parseInt(organizationId, 10), 'DELETE', 'INVITATION', invitationResult.data[0].id, JSON.stringify({ code: invitationResult.data[0].code })]
     );
 
     res.json({
@@ -409,7 +409,7 @@ router.delete('/invitations/:organizationId', verifyToken, requirePlatformOwner,
 });
 
 // Get storage analytics
-router.get('/storage/analytics', verifyToken, requirePlatformOwner, async (req, res) => {
+router.get('/storage/analytics', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     // Get storage overview
     // Calculate total quota separately to avoid duplication from JOIN
@@ -487,7 +487,7 @@ router.get('/storage/analytics', verifyToken, requirePlatformOwner, async (req, 
 });
 
 // Get system settings
-router.get('/settings', verifyToken, requirePlatformOwner, async (req, res) => {
+router.get('/settings', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     // This would typically come from a settings table
     // For now, we'll return some default settings
@@ -514,7 +514,7 @@ router.get('/settings', verifyToken, requirePlatformOwner, async (req, res) => {
 });
 
 // Update system settings
-router.put('/settings', verifyToken, requirePlatformOwner, async (req, res) => {
+router.put('/settings', verifyToken, requirePlatformOwner, async(req, res) => {
   try {
     const { maxFileSize, allowedFileTypes, defaultStorageQuota, sessionTimeout, registrationEnabled, invitationRequired } = req.body;
 
@@ -522,13 +522,13 @@ router.put('/settings', verifyToken, requirePlatformOwner, async (req, res) => {
     // For now, we'll just log the update attempt
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, req.user.organization_id, 'UPDATE', 'SYSTEM_SETTINGS', 1, JSON.stringify({ 
-        maxFileSize, 
-        allowedFileTypes, 
-        defaultStorageQuota, 
-        sessionTimeout, 
-        registrationEnabled, 
-        invitationRequired 
+      [req.user.id, req.user.organization_id, 'UPDATE', 'SYSTEM_SETTINGS', 1, JSON.stringify({
+        maxFileSize,
+        allowedFileTypes,
+        defaultStorageQuota,
+        sessionTimeout,
+        registrationEnabled,
+        invitationRequired
       })]
     );
 
@@ -550,7 +550,7 @@ router.put('/settings', verifyToken, requirePlatformOwner, async (req, res) => {
 // ============================================
 
 // Get organization dashboard statistics (for organization admin)
-router.get('/organization/stats', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/organization/stats', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const orgId = req.user.organization_id;
 
@@ -624,7 +624,7 @@ router.get('/organization/stats', verifyToken, requireOrgAdmin, async (req, res)
 });
 
 // Get organization storage analytics
-router.get('/organization/storage', verifyToken, requireOrgAdmin, async (req, res) => {
+router.get('/organization/storage', verifyToken, requireOrgAdmin, async(req, res) => {
   try {
     const orgId = req.user.organization_id;
 

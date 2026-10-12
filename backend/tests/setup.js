@@ -1,7 +1,7 @@
 const { testConnection } = require('../config/database');
 
 // Global test setup
-beforeAll(async () => {
+beforeAll(async() => {
   if (process.env.RUN_DB_TESTS !== 'true') {
     return;
   }
@@ -14,7 +14,7 @@ beforeAll(async () => {
 });
 
 // Global test teardown
-afterAll(async () => {
+afterAll(async() => {
   // Clean up any global resources
 });
 

@@ -30,7 +30,9 @@ const { canManageFolder } = require('../utils/authorization');
 
 // Normalize date to MySQL datetime (YYYY-MM-DD HH:mm:ss). Handles ISO strings from frontend.
 const toMysqlDatetime = (value) => {
-  if (value == null || value === '') return null;
+  if (value == null || value === '') {
+    return null;
+  }
   try {
     if (typeof value === 'string' && value.includes('T')) {
       return formatDate(new Date(value), 'YYYY-MM-DD HH:mm:ss');
@@ -43,7 +45,9 @@ const toMysqlDatetime = (value) => {
 
 // Helper function to decode filename (handles URL encoding from browser)
 const decodeFilename = (filename) => {
-  if (!filename) return filename;
+  if (!filename) {
+    return filename;
+  }
   try {
     // Try to decode URL-encoded filename (browsers may encode special characters)
     // First check if it's URL encoded
@@ -59,7 +63,9 @@ const decodeFilename = (filename) => {
 };
 
 const sanitizeFileRecord = (file) => {
-  if (!file) return file;
+  if (!file) {
+    return file;
+  }
   const { storage_path, current_storage_path, ...safeFile } = file;
   return safeFile;
 };
@@ -75,10 +81,10 @@ const storage = multer.diskStorage({
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
     // Decode filename to preserve extension with special characters
     const decodedName = decodeFilename(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(decodedName));
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(decodedName)}`);
   }
 });
 
@@ -87,7 +93,7 @@ const fileFilter = (req, file, cb) => {
   // Decode filename to handle URL-encoded characters
   const decodedName = decodeFilename(file.originalname);
   const fileExtension = path.extname(decodedName).toLowerCase().substring(1);
-  
+
   if (allowedTypes.includes(fileExtension)) {
     cb(null, true);
   } else {
@@ -96,15 +102,15 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
+  storage,
+  fileFilter,
   limits: {
     fileSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 100 * 1024 * 1024
   }
 });
 
 // Get all files
-router.get('/', verifyToken, validatePagination, validateSearch, async (req, res) => {
+router.get('/', verifyToken, validatePagination, validateSearch, async(req, res) => {
   try {
     logger.debug('Files list request received', {
       user: req.user.email,
@@ -117,8 +123,8 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
     const limitNum = parseInt(limit, 10) || 10;
     const offset = (pageNum - 1) * limitNum;
 
-    let whereConditions = ['f.status = "active"'];
-    let queryParams = [];
+    const whereConditions = ['f.status = "active"'];
+    const queryParams = [];
 
     // Filter by organization (platform owner can see all, others see their org)
     if (req.user.role === 'platform_owner' && organizationId) {
@@ -151,8 +157,8 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
       if (folderId === null || folderId === 'null' || folderId === '') {
         whereConditions.push('f.folder_id IS NULL');
       } else {
-      whereConditions.push('f.folder_id = ?');
-      queryParams.push(folderId);
+        whereConditions.push('f.folder_id = ?');
+        queryParams.push(folderId);
       }
     }
 
@@ -186,9 +192,9 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
       offset,
       totalParams: [req.user.id, ...queryParams].length
     });
-    
+
     const filesResult = await executeQuery(filesQuery, [req.user.id, ...queryParams]);
-    
+
     logger.debug('Files list query completed', {
       success: filesResult.success,
       error: filesResult.error,
@@ -203,7 +209,7 @@ router.get('/', verifyToken, validatePagination, validateSearch, async (req, res
     `;
 
     const countResult = await executeQuery(countQuery, queryParams);
-    
+
     logger.debug('Files count query completed', {
       success: countResult.success,
       error: countResult.error,
@@ -274,10 +280,10 @@ router.post('/upload', verifyToken, (req, res, next) => {
     headers: {
       'content-type': req.headers['content-type'],
       'content-length': req.headers['content-length'],
-      'authorization': req.headers['authorization'] ? 'present' : 'missing'
+      'authorization': req.headers.authorization ? 'present' : 'missing'
     }
   });
-  
+
   upload.single('file')(req, res, (err) => {
     if (err) {
       logger.error('Multer upload error', {
@@ -287,7 +293,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
         name: err.name,
         stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
       });
-      
+
       // Handle multer errors
       if (err.code === 'LIMIT_FILE_SIZE') {
         const maxSize = parseInt(process.env.MAX_FILE_SIZE, 10) || 100 * 1024 * 1024;
@@ -328,7 +334,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
     });
     next();
   });
-}, validateFileUpload, async (req, res) => {
+}, validateFileUpload, async(req, res) => {
   try {
     logger.debug('Upload handler reached', {
       hasFile: !!req.file,
@@ -424,7 +430,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
       existingFileQuery = 'SELECT id, current_version FROM files WHERE name = ? AND folder_id = ? AND organization_id = ? AND status = "active"';
       existingFileParams = [fileName, targetFolderId, req.user.organization_id];
     }
-    
+
     const existingFileResult = await executeQuery(existingFileQuery, existingFileParams);
 
     let fileId;
@@ -460,7 +466,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
             message: 'Storage quota exceeded. Please contact your administrator to increase storage quota.'
           });
         }
-        
+
         // Create version record for the old file
         await executeQuery(
           'INSERT INTO file_versions (file_id, version_number, file_size, storage_path, uploaded_by) VALUES (?, ?, ?, ?, ?)',
@@ -504,30 +510,30 @@ router.post('/upload', verifyToken, (req, res, next) => {
         });
       }
 
-    const fileResult = await executeQuery(
+      const fileResult = await executeQuery(
         'INSERT INTO files (name, original_name, storage_path, file_size, file_type, description, organization_id, uploaded_by, folder_id, status, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
+        [
           fileName,
           decodedOriginalName, // Use decoded original name for proper UTF-8 encoding
-        file.path,
-        file.size,
+          file.path,
+          file.size,
           path.extname(decodedOriginalName).toLowerCase(),
-        description || null,
-        req.user.organization_id,
-        req.user.id,
+          description || null,
+          req.user.organization_id,
+          req.user.id,
           targetFolderId,
           'active',
           1 // First version
-      ]
-    );
+        ]
+      );
 
-    if (!fileResult.success) {
-      await fs.unlink(file.path);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to save file record'
-      });
-    }
+      if (!fileResult.success) {
+        await fs.unlink(file.path);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to save file record'
+        });
+      }
 
       fileId = fileResult.data.insertId;
     }
@@ -550,11 +556,11 @@ router.post('/upload', verifyToken, (req, res, next) => {
       success: true,
       message: isNewVersion ? 'New version uploaded successfully' : 'File uploaded successfully',
       data: {
-        fileId: fileId,
+        fileId,
         name: fileName,
         size: file.size,
         type: path.extname(decodedOriginalName).toLowerCase(),
-        isNewVersion: isNewVersion
+        isNewVersion
       }
     });
   } catch (error) {
@@ -575,7 +581,7 @@ router.post('/upload', verifyToken, (req, res, next) => {
 
 // Get shared with me (files and folders shared to current user)
 // NOTE: This route MUST be before /:fileId routes to avoid being matched as a fileId
-router.get('/shared-with-me', verifyToken, validatePagination, async (req, res) => {
+router.get('/shared-with-me', verifyToken, validatePagination, async(req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -692,7 +698,7 @@ router.get('/shared-with-me', verifyToken, validatePagination, async (req, res) 
 });
 
 // Get file versions - MUST be before /:fileId route
-router.get('/:fileId/versions', verifyToken, requireFileAccess, async (req, res) => {
+router.get('/:fileId/versions', verifyToken, requireFileAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -728,15 +734,15 @@ router.get('/:fileId/versions', verifyToken, requireFileAccess, async (req, res)
 
     // Format versions - include current version
     const versions = versionsResult.data || [];
-    
+
     // Add current version to the list
     if (file) {
       const currentVersionData = await executeQuery(
         'SELECT first_name, last_name, email FROM users WHERE id = ?',
         [file.uploaded_by]
       );
-      const uploader = currentVersionData.success && currentVersionData.data.length > 0 
-        ? currentVersionData.data[0] 
+      const uploader = currentVersionData.success && currentVersionData.data.length > 0
+        ? currentVersionData.data[0]
         : { first_name: null, last_name: null, email: null };
 
       versions.unshift({
@@ -844,7 +850,7 @@ router.post('/:fileId/ocr', verifyToken, requireFileWriteAccess, async(req, res)
 });
 
 // Upload new version - MUST be before /:fileId route
-router.post('/:fileId/versions', verifyToken, requireFileWriteAccess, upload.single('file'), async (req, res) => {
+router.post('/:fileId/versions', verifyToken, requireFileWriteAccess, upload.single('file'), async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -934,7 +940,7 @@ router.post('/:fileId/versions', verifyToken, requireFileWriteAccess, upload.sin
       message: 'New version uploaded successfully',
       data: {
         version: newVersionNumber,
-        fileId: fileId
+        fileId
       }
     });
   } catch (error) {
@@ -947,14 +953,12 @@ router.post('/:fileId/versions', verifyToken, requireFileWriteAccess, upload.sin
 });
 
 // Keep version forever - MUST be before /:fileId route
-router.put('/:fileId/versions/:versionId/keep', verifyToken, requireFileWriteAccess, async (req, res) => {
+router.put('/:fileId/versions/:versionId/keep', verifyToken, requireFileWriteAccess, async(req, res) => {
   try {
-    const { fileId, versionId } = req.params;
-
     // For now, we'll add a flag to file_versions table
     // Since the schema doesn't have a "keep_forever" field, we'll add it via ALTER if needed
     // For now, we'll just return success (can be implemented later with schema update)
-    
+
     res.json({
       success: true,
       message: 'Version will be kept forever'
@@ -969,7 +973,7 @@ router.put('/:fileId/versions/:versionId/keep', verifyToken, requireFileWriteAcc
 });
 
 // Get file by ID
-router.get('/:fileId', verifyToken, requireFileAccess, async (req, res) => {
+router.get('/:fileId', verifyToken, requireFileAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1007,7 +1011,7 @@ router.get('/:fileId', verifyToken, requireFileAccess, async (req, res) => {
 });
 
 // Download file
-router.get('/:fileId/download', verifyToken, requireFileAccess, async (req, res) => {
+router.get('/:fileId/download', verifyToken, requireFileAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1046,7 +1050,7 @@ router.get('/:fileId/download', verifyToken, requireFileAccess, async (req, res)
 });
 
 // Preview file (for images, PDFs, etc.)
-router.get('/:fileId/preview', verifyToken, requireFileAccess, async (req, res) => {
+router.get('/:fileId/preview', verifyToken, requireFileAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1077,7 +1081,7 @@ router.get('/:fileId/preview', verifyToken, requireFileAccess, async (req, res) 
     res.setHeader('Cache-Control', 'public, max-age=3600');
     // Allow iframe embedding for previews - override Helmet's CSP
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:3000 https://taskinsight.my");
+    res.setHeader('Content-Security-Policy', 'frame-ancestors \'self\' http://localhost:3000 https://taskinsight.my');
 
     // Stream the file
     const fileStream = fsSync.createReadStream(req.file.path);
@@ -1117,20 +1121,20 @@ function getContentType(fileType) {
     'mov': 'video/quicktime',
     'txt': 'text/plain',
     'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   };
-  
+
   for (const [key, value] of Object.entries(contentTypes)) {
     if (type.includes(key)) {
       return value;
     }
   }
-  
+
   return 'application/octet-stream';
 }
 
 // Update file
-router.put('/:fileId', verifyToken, requireFileWriteAccess, validateFileUpdate, async (req, res) => {
+router.put('/:fileId', verifyToken, requireFileWriteAccess, validateFileUpdate, async(req, res) => {
   try {
     const { fileId } = req.params;
     const { name, description, folderId } = req.body;
@@ -1210,7 +1214,7 @@ router.put('/:fileId', verifyToken, requireFileWriteAccess, validateFileUpdate, 
 });
 
 // Toggle star/favorite for file or folder
-router.post('/star/:itemType/:itemId', verifyToken, async (req, res) => {
+router.post('/star/:itemType/:itemId', verifyToken, async(req, res) => {
   try {
     const { itemType, itemId } = req.params; // itemType: 'file' or 'folder'
 
@@ -1239,19 +1243,19 @@ router.post('/star/:itemType/:itemId', verifyToken, async (req, res) => {
         message: 'Item unstarred',
         data: { starred: false }
       });
-    } else {
-      // Star - add to starred_items
-      await executeQuery(
-        'INSERT INTO starred_items (user_id, item_type, item_id) VALUES (?, ?, ?)',
-        [req.user.id, itemType, itemId]
-      );
-
-      return res.json({
-        success: true,
-        message: 'Item starred',
-        data: { starred: true }
-      });
     }
+    // Star - add to starred_items
+    await executeQuery(
+      'INSERT INTO starred_items (user_id, item_type, item_id) VALUES (?, ?, ?)',
+      [req.user.id, itemType, itemId]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Item starred',
+      data: { starred: true }
+    });
+
   } catch (error) {
     console.error('Toggle star error:', error);
     res.status(500).json({
@@ -1266,7 +1270,7 @@ router.post('/star/:itemType/:itemId', verifyToken, async (req, res) => {
 // ============================================
 
 // Share a file
-router.post('/:fileId/share', verifyToken, requireFileOwnerOrAdmin, async (req, res) => {
+router.post('/:fileId/share', verifyToken, requireFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId } = req.params;
     const { email, permission, expiresAt } = req.body;
@@ -1333,10 +1337,10 @@ router.post('/:fileId/share', verifyToken, requireFileOwnerOrAdmin, async (req, 
     // Log the share action
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, req.user.organization_id, 'SHARE', 'FILE', fileId, JSON.stringify({ 
-        sharedWith: email || 'link', 
+      [req.user.id, req.user.organization_id, 'SHARE', 'FILE', fileId, JSON.stringify({
+        sharedWith: email || 'link',
         permission: permission || 'view',
-        shareType 
+        shareType
       })]
     );
 
@@ -1358,7 +1362,7 @@ router.post('/:fileId/share', verifyToken, requireFileOwnerOrAdmin, async (req, 
 });
 
 // Get all shares for a file
-router.get('/:fileId/shares', verifyToken, requireFileOwnerOrAdmin, async (req, res) => {
+router.get('/:fileId/shares', verifyToken, requireFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1410,7 +1414,7 @@ router.get('/:fileId/shares', verifyToken, requireFileOwnerOrAdmin, async (req, 
 });
 
 // Revoke a share
-router.delete('/:fileId/shares/:shareId', verifyToken, requireFileOwnerOrAdmin, async (req, res) => {
+router.delete('/:fileId/shares/:shareId', verifyToken, requireFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId, shareId } = req.params;
 
@@ -1464,7 +1468,7 @@ router.delete('/:fileId/shares/:shareId', verifyToken, requireFileOwnerOrAdmin, 
 // ============================================
 
 // Share a folder
-router.post('/folders/:folderId/share', verifyToken, async (req, res) => {
+router.post('/folders/:folderId/share', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
     const { email, permission, expiresAt } = req.body;
@@ -1559,10 +1563,10 @@ router.post('/folders/:folderId/share', verifyToken, async (req, res) => {
     // Log the share action
     await executeQuery(
       'INSERT INTO audit_logs (user_id, organization_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, req.user.organization_id, 'SHARE', 'FOLDER', folderId, JSON.stringify({ 
-        sharedWith: email || 'link', 
+      [req.user.id, req.user.organization_id, 'SHARE', 'FOLDER', folderId, JSON.stringify({
+        sharedWith: email || 'link',
         permission: permission || 'view',
-        shareType 
+        shareType
       })]
     );
 
@@ -1584,7 +1588,7 @@ router.post('/folders/:folderId/share', verifyToken, async (req, res) => {
 });
 
 // Get all shares for a folder
-router.get('/folders/:folderId/shares', verifyToken, async (req, res) => {
+router.get('/folders/:folderId/shares', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
 
@@ -1659,7 +1663,7 @@ router.get('/folders/:folderId/shares', verifyToken, async (req, res) => {
 });
 
 // Revoke a folder share
-router.delete('/folders/:folderId/shares/:shareId', verifyToken, async (req, res) => {
+router.delete('/folders/:folderId/shares/:shareId', verifyToken, async(req, res) => {
   try {
     const { folderId, shareId } = req.params;
 
@@ -1732,7 +1736,7 @@ router.delete('/folders/:folderId/shares/:shareId', verifyToken, async (req, res
 });
 
 // Get starred items
-router.get('/starred/list', verifyToken, async (req, res) => {
+router.get('/starred/list', verifyToken, async(req, res) => {
   try {
     // Get starred files
     const starredFilesQuery = `
@@ -1793,13 +1797,13 @@ router.get('/starred/list', verifyToken, async (req, res) => {
 });
 
 // Get deleted files (trash)
-router.get('/trash/list', verifyToken, validatePagination, async (req, res) => {
+router.get('/trash/list', verifyToken, validatePagination, async(req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereConditions = ['f.status = "deleted"'];
-    let queryParams = [];
+    const whereConditions = ['f.status = "deleted"'];
+    const queryParams = [];
 
     // Filter by organization
     if (req.user.role !== 'platform_owner') {
@@ -1824,7 +1828,7 @@ router.get('/trash/list', verifyToken, validatePagination, async (req, res) => {
       LEFT JOIN organizations o ON f.organization_id = o.id
       ${whereClause}
       ORDER BY f.deleted_at DESC 
-      LIMIT ${parseInt(limit)} OFFSET ${offset}
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
     `;
 
     const filesResult = await executeQuery(filesQuery, queryParams);
@@ -1850,8 +1854,8 @@ router.get('/trash/list', verifyToken, validatePagination, async (req, res) => {
       data: {
         files: sanitizeFileRecords(filesResult.data),
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parseInt(page, 10),
+          limit: parseInt(limit, 10),
           total: countResult.data[0].total,
           pages: Math.ceil(countResult.data[0].total / limit)
         }
@@ -1867,7 +1871,7 @@ router.get('/trash/list', verifyToken, validatePagination, async (req, res) => {
 });
 
 // Restore file from trash
-router.post('/:fileId/restore', verifyToken, requireDeletedFileOwnerOrAdmin, async (req, res) => {
+router.post('/:fileId/restore', verifyToken, requireDeletedFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1904,7 +1908,7 @@ router.post('/:fileId/restore', verifyToken, requireDeletedFileOwnerOrAdmin, asy
 });
 
 // Permanently delete file
-router.delete('/:fileId/permanent', verifyToken, requireDeletedFileOwnerOrAdmin, async (req, res) => {
+router.delete('/:fileId/permanent', verifyToken, requireDeletedFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -1971,7 +1975,7 @@ router.delete('/:fileId/permanent', verifyToken, requireDeletedFileOwnerOrAdmin,
 });
 
 // Delete file (soft delete - move to trash)
-router.delete('/:fileId', verifyToken, requireFileOwnerOrAdmin, async (req, res) => {
+router.delete('/:fileId', verifyToken, requireFileOwnerOrAdmin, async(req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -2016,12 +2020,12 @@ router.delete('/:fileId', verifyToken, requireFileOwnerOrAdmin, async (req, res)
 });
 
 // Get folders - MUST be before /folders/:folderId to avoid route conflict
-router.get('/folders/list', verifyToken, async (req, res) => {
+router.get('/folders/list', verifyToken, async(req, res) => {
   try {
     const { organizationId, parentId, q: search } = req.query;
 
-    let whereConditions = ['folders.status = "active"'];
-    let queryParams = [];
+    const whereConditions = ['folders.status = "active"'];
+    const queryParams = [];
 
     // Filter by organization (platform owner can see all, others see their org)
     if (req.user.role === 'platform_owner' && organizationId) {
@@ -2100,7 +2104,7 @@ router.get('/folders/list', verifyToken, async (req, res) => {
 });
 
 // Get specific folder by ID (with permission check) - MUST be after /folders/list
-router.get('/folders/:folderId', verifyToken, async (req, res) => {
+router.get('/folders/:folderId', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
     const folderIdNum = parseInt(folderId, 10);
@@ -2172,7 +2176,7 @@ router.get('/folders/:folderId', verifyToken, async (req, res) => {
 });
 
 // Create folder
-router.post('/folders', verifyToken, validateFolder, async (req, res) => {
+router.post('/folders', verifyToken, validateFolder, async(req, res) => {
   try {
     logger.debug('Create folder request received', {
       bodyType: typeof req.body,
@@ -2180,7 +2184,7 @@ router.post('/folders', verifyToken, validateFolder, async (req, res) => {
       organizationId: req.user.organization_id,
       contentType: req.headers['content-type']
     });
-    
+
     // Check if body is empty or malformed
     if (!req.body || Object.keys(req.body).length === 0) {
       logger.warn('Create folder request missing body', {
@@ -2192,15 +2196,16 @@ router.post('/folders', verifyToken, validateFolder, async (req, res) => {
         message: 'Request body is empty or missing. Please send a valid JSON body with name field.'
       });
     }
-    
+
     // Ensure parentId is a number or null, not an object
-    let { name, description, parentId } = req.body;
-    
+    const { name, description } = req.body;
+    let { parentId } = req.body;
+
     // Handle parentId if it's an object (shouldn't happen, but just in case)
     if (parentId && typeof parentId === 'object') {
       parentId = parentId.id || null;
     }
-    
+
     // Convert parentId to number or null
     if (parentId !== null && parentId !== undefined) {
       parentId = parseInt(parentId, 10);
@@ -2237,7 +2242,7 @@ router.post('/folders', verifyToken, validateFolder, async (req, res) => {
       existingFolderQuery = 'SELECT id FROM folders WHERE name = ? AND parent_id = ? AND organization_id = ? AND status = "active"';
       existingFolderParams = [name, parentId, req.user.organization_id];
     }
-    
+
     const existingFolder = await executeQuery(existingFolderQuery, existingFolderParams);
 
     if (existingFolder.success && existingFolder.data.length > 0) {
@@ -2254,7 +2259,7 @@ router.post('/folders', verifyToken, validateFolder, async (req, res) => {
       parentId: parentId || null,
       hasDescription: !!description
     });
-    
+
     const folderResult = await executeQuery(
       'INSERT INTO folders (name, description, organization_id, created_by, parent_id, status) VALUES (?, ?, ?, ?, ?, ?)',
       [name, description || null, req.user.organization_id, req.user.id, parentId || null, 'active']
@@ -2299,7 +2304,7 @@ router.post('/folders', verifyToken, validateFolder, async (req, res) => {
 });
 
 // Rename file
-router.put('/:fileId/rename', verifyToken, requireFileWriteAccess, async (req, res) => {
+router.put('/:fileId/rename', verifyToken, requireFileWriteAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
     const { name } = req.body;
@@ -2367,7 +2372,7 @@ router.put('/:fileId/rename', verifyToken, requireFileWriteAccess, async (req, r
 });
 
 // Move file to folder
-router.put('/:fileId/move', verifyToken, requireFileWriteAccess, async (req, res) => {
+router.put('/:fileId/move', verifyToken, requireFileWriteAccess, async(req, res) => {
   try {
     const { fileId } = req.params;
     const { folderId } = req.body;
@@ -2443,7 +2448,7 @@ router.put('/:fileId/move', verifyToken, requireFileWriteAccess, async (req, res
 });
 
 // Rename folder
-router.put('/folders/:folderId/rename', verifyToken, async (req, res) => {
+router.put('/folders/:folderId/rename', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
     const { name } = req.body;
@@ -2511,16 +2516,16 @@ router.put('/folders/:folderId/rename', verifyToken, async (req, res) => {
 });
 
 // Move folder to another folder
-router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
+router.put('/folders/:folderId/move', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
     let { parentId } = req.body;
-    
+
     // Normalize parentId: convert to null if undefined, empty string, or "null"
     if (parentId === undefined || parentId === '' || parentId === 'null' || parentId === null) {
       parentId = null;
     } else {
-      parentId = parseInt(parentId);
+      parentId = parseInt(parentId, 10);
       if (isNaN(parentId)) {
         return res.status(400).json({
           success: false,
@@ -2553,7 +2558,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
     }
 
     // Cannot move folder into itself
-    if (parentId !== null && parentId === parseInt(folderId)) {
+    if (parentId !== null && parentId === parseInt(folderId, 10)) {
       return res.status(400).json({
         success: false,
         message: 'Cannot move folder into itself'
@@ -2585,11 +2590,11 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
       }
 
       // Check for circular reference - cannot move folder into its own descendant
-      const checkCircular = async (checkFolderId) => {
-        if (parseInt(checkFolderId) === parseInt(folderId)) {
+      const checkCircular = async(checkFolderId) => {
+        if (parseInt(checkFolderId, 10) === parseInt(folderId, 10)) {
           return true; // Found circular reference
         }
-        
+
         const childrenResult = await executeQuery(
           'SELECT id FROM folders WHERE parent_id = ? AND status = "active"',
           [checkFolderId]
@@ -2637,7 +2642,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
     }
 
     // Update paths of all descendant folders recursively
-    const updateDescendantPaths = async (parentFolderId, parentPath) => {
+    const updateDescendantPaths = async(parentFolderId, parentPath) => {
       const childrenResult = await executeQuery(
         'SELECT id, name FROM folders WHERE parent_id = ? AND status = "active"',
         [parentFolderId]
@@ -2679,7 +2684,7 @@ router.put('/folders/:folderId/move', verifyToken, async (req, res) => {
 });
 
 // Download folder as zip
-router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
+router.get('/folders/:folderId/download', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
 
@@ -2707,9 +2712,9 @@ router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
     }
 
     // Get all files in this folder and subfolders recursively
-    const getAllFilesInFolder = async (parentFolderId, basePath = '') => {
+    const getAllFilesInFolder = async(parentFolderId, basePath = '') => {
       const files = [];
-      
+
       // Get files in current folder
       const filesResult = await executeQuery(
         `SELECT f.id, f.name, f.storage_path, f.file_size 
@@ -2784,7 +2789,7 @@ router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
     const uploadPath = path.join(__dirname, '../uploads');
     for (const file of allFiles) {
       const filePath = path.join(uploadPath, path.basename(file.file_path));
-      
+
       // Check if file exists on disk
       try {
         await fs.access(filePath);
@@ -2819,7 +2824,7 @@ router.get('/folders/:folderId/download', verifyToken, async (req, res) => {
 });
 
 // Delete folder (soft delete - mark as deleted)
-router.delete('/folders/:folderId', verifyToken, async (req, res) => {
+router.delete('/folders/:folderId', verifyToken, async(req, res) => {
   try {
     const { folderId } = req.params;
 
@@ -2926,12 +2931,12 @@ router.delete('/folders/:folderId', verifyToken, async (req, res) => {
 });
 
 // Get file statistics
-router.get('/stats/overview', verifyToken, async (req, res) => {
+router.get('/stats/overview', verifyToken, async(req, res) => {
   try {
     const { organizationId } = req.query;
 
-    let whereConditions = ['status = "active"'];
-    let queryParams = [];
+    const whereConditions = ['status = "active"'];
+    const queryParams = [];
 
     // Filter by organization (platform owner can see all, others see their org)
     if (req.user.role === 'platform_owner' && organizationId) {
@@ -2987,10 +2992,10 @@ router.get('/stats/overview', verifyToken, async (req, res) => {
     res.json({
       success: true,
       data: {
-        totalFiles: parseInt(totalResult.data[0].totalFiles) || 0,
-        totalSize: parseInt(totalResult.data[0].totalSize) || 0,
+        totalFiles: parseInt(totalResult.data[0].totalFiles, 10) || 0,
+        totalSize: parseInt(totalResult.data[0].totalSize, 10) || 0,
         typeStats: typeStatsResult.data,
-        recentUploads: parseInt(recentResult.data[0].recentUploads) || 0
+        recentUploads: parseInt(recentResult.data[0].recentUploads, 10) || 0
       }
     });
   } catch (error) {
@@ -3003,7 +3008,7 @@ router.get('/stats/overview', verifyToken, async (req, res) => {
 });
 
 // Clean up old deleted files (30+ days in trash)
-router.post('/cleanup/old-trash', verifyToken, async (req, res) => {
+router.post('/cleanup/old-trash', verifyToken, async(req, res) => {
   try {
     // Only allow platform owners to run cleanup
     if (req.user.role !== 'platform_owner') {
@@ -3044,7 +3049,7 @@ router.post('/cleanup/old-trash', verifyToken, async (req, res) => {
 
         // Delete from database
         await executeQuery('DELETE FROM files WHERE id = ?', [file.id]);
-        
+
         deletedCount++;
       } catch (error) {
         console.error(`Failed to delete file ${file.id}:`, error);
